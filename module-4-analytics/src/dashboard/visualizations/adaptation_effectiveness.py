@@ -1,0 +1,1 @@
+# Adaptation effectiveness visualization

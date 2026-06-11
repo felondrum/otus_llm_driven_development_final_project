@@ -1,0 +1,115 @@
+# spec/testing.yml
+schema: 1.0.0
+type: testing_strategy
+
+levels:
+  unit:
+    framework: pytest
+    coverage_target: 85
+    per_module:
+      module-1-core-engine:
+        test_path: tests/unit/core/
+        mocks:
+          - QdrantClient
+          - OllamaClient
+          - RedisClient
+      module-2-chat-frontend:
+        test_path: tests/unit/chat/
+        mocks:
+          - WebSocket
+          - gRPC client
+      module-3-admin-data:
+        test_path: tests/unit/admin/
+        mocks:
+          - QdrantClient
+          - FileSystem
+      module-4-analytics:
+        test_path: tests/unit/analytics/
+        mocks:
+          - Classifiers
+          - Database
+
+  integration:
+    framework: pytest
+    services_required:
+      - qdrant (test container)
+      - redis (test container)
+      - ollama (with tiny model)
+    test_scenarios:
+      - name: "full_adaptation_flow"
+        steps:
+          - "Send message to orchestrator"
+          - "Verify retriever called"
+          - "Verify LLM called"
+          - "Verify response adapted"
+          - "Verify async event published"
+      - name: "cache_hit_flow"
+        steps:
+          - "Send same message twice"
+          - "Verify second request uses cache"
+      - name: "fallback_flow"
+        steps:
+          - "Kill ollama"
+          - "Send message"
+          - "Verify fallback to OpenAI"
+      - name: "admin_upload_flow"
+        steps:
+          - "Upload document"
+          - "Verify chunks created in Qdrant"
+          - "Verify search finds new document"
+
+  rag_evaluation:
+    framework: ragas
+    dataset: tests/ragas/benchmark.json
+    size: 100
+    metrics:
+      - name: faithfulness
+        threshold: 0.75
+        weight: 0.3
+      - name: answer_relevancy
+        threshold: 0.70
+        weight: 0.3
+      - name: context_recall
+        threshold: 0.70
+        weight: 0.2
+      - name: context_precision
+        threshold: 0.65
+        weight: 0.2
+    schedule: nightly
+
+  performance:
+    framework: locust
+    test_files: tests/performance/locustfile.py
+    scenarios:
+      - name: typical_chat
+        users: 100
+        spawn_rate: 10
+        run_time: 5m
+        think_time: 2..5
+        target_p95_ms: 800
+
+      - name: burst_messages
+        users: 500
+        spawn_rate: 50
+        run_time: 2m
+        think_time: 0.1..0.5
+        target_error_rate: 0.01
+
+  e2e:
+    framework: playwright + pytest
+    browser: chromium
+    scenarios:
+      - name: "user_sends_message"
+        steps:
+          - "Login as user1"
+          - "Login as user2 in second browser"
+          - "User1 sends 'Привет'"
+          - "User2 sees adapted message"
+      - name: "style_selection"
+        steps:
+          - "User selects Chekhov style"
+          - "Sends message"
+          - "Verify style applied"
+      - name: "admin_uploads_document"
+        steps:
+          - "Admin logs in"

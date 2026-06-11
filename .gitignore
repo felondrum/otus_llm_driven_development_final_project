@@ -1,0 +1,117 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+*.virtualenv
+*.virtualenv/
+*.virtualenv/**
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+logs/**
+
+# OS files
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Documentation
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# Models and data
+models/
+models/**
+*.model
+*.checkpoint
+data/
+data/**
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+.dockerignore
+
+# Node.js (для модуля 2)
+node_modules/
+.next/
+.nuxt/
+.npm/
+
+# Admin frontend
+module-3-admin-data/src/frontend_admin/node_modules/
+module-3-admin-data/src/frontend_admin/.next/
+
+# Uploads and temporary files
+uploads/
+uploads/**
+*.tmp
+*.temp
+.tmp/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Cache
+.cache/
+.cache/**
+*.cache
+
+# Prometheus metrics
+metrics/
+metrics/**
+
+# Notebook outputs
+notebooks/*.ipynb_checkpoints/
+notebooks/output/
+
+# Shared stubs (может генерироваться)
+shared/src/grpc_stubs/*.py
+shared/src/grpc_stubs/*.pyi

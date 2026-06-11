@@ -1,0 +1,62 @@
+# spec/project.yml
+schema: 1.0.0
+name: chameleon-chat
+version: 1.0.0
+description: "Адаптивная коммуникационная система реального времени с RAG и LLM"
+
+context:
+  problem_statement: |
+    В корпоративной среде сотрудники часто пишут сообщения в неформальном или 
+    агрессивном тоне, что приводит к конфликтам и снижению эффективности 
+    коммуникации. Существующие решения (модерация, цензура) либо нарушают 
+    приватность, либо не учитывают контекст и личность собеседника.
+
+  solution_overview: |
+    Chameleon Chat — это чат-система, которая автоматически адаптирует 
+    сообщения отправителя к профилю получателя и корпоративным правилам, 
+    сохраняя исходный смысл. Адаптированная версия показывается получателю, 
+    оригинал сохраняется только для аналитики и обучения.
+
+  target_audience:
+    - Разработчики AI-систем
+    - Исследователи в области NLP
+    - Корпоративные пользователи (демо)
+
+  constraints:
+    - Локальный деплой (Docker Compose)
+    - Без реальной авторизации (stub)
+    - Прототип, не для production
+    - GPU optional, CPU fallback
+
+tech_stack:
+  backend:
+    - Python 3.11
+    - FastAPI
+    - gRPC
+    - SQLAlchemy
+  frontend:
+    - Node.js 20
+    - React 18
+    - WebSocket
+  ai:
+    - Ollama (llama3.2:3b, qwen2.5:7b, mixtral:8x7b)
+    - Qdrant (vector DB)
+    - Langfuse (observability)
+  data:
+    - PostgreSQL 15
+    - Redis 7
+    - MinIO
+  testing:
+    - pytest
+    - RAGas
+    - Locust
+
+repository:
+  structure: mono-repo
+  modules:
+    - module-1-core-engine
+    - module-2-chat-frontend
+    - module-3-admin-data
+    - module-4-analytics
+    - shared
+    - contracts

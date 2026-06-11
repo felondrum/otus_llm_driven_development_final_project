@@ -1,0 +1,1 @@
+# Consumer из Redis/RabbitMQ

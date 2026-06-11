@@ -1,0 +1,128 @@
+# spec/modules/core-engine.yml
+schema: 1.0.0
+type: module
+id: module-1-core-engine
+name: "Core Engine"
+
+components:
+  - id: orchestrator
+    name: "Orchestrator Service"
+    responsibility: "Координация адаптации сообщений"
+    technology: "Python/FastAPI + gRPC"
+    internal_components:
+      - CacheManager (Redis)
+      - ContextAssembler
+      - InputValidator
+      - MetricsCollector
+    stateful: false
+    scale: horizontal (2+ replicas)
+
+  - id: retriever
+    name: "RAG Retriever Service"
+    responsibility: "Поиск профилей, правил, стилей в Qdrant"
+    technology: "Python + Qdrant client"
+    internal_components:
+      - ExactLookup (profiles)
+      - VectorSearch (rules)
+      - HybridSearch (styles)
+      - EmbeddingClient (Ollama)
+    stateful: true #(depends on Qdrant)
+    scale: vertical only
+
+  - id: llm-gateway
+    name: "LLM Gateway"
+    responsibility: "Маршрутизация между LLM моделями"
+    technology: "Python + aiohttp"
+    internal_components:
+      - ModelRouter
+      - CircuitBreaker
+      - ResponseCache
+      - FallbackHandler
+    stateful: false
+    scale: horizontal (2+ replicas)
+
+apis:
+  orchestrator_grpc:
+    service: OrchestratorService
+    methods:
+      - name: ProcessMessage
+        request: ProcessMessageRequest
+        response: ProcessMessageResponse
+        timeout_ms: 5000
+        retry: 3
+      - name: HealthCheck
+        request: Empty
+        response: HealthStatus
+
+  retriever_grpc:
+    service: RetrieverService
+    methods:
+      - name: GetProfile
+        request: GetProfileRequest
+        response: UserProfile
+        cache_ttl: 3600
+      - name: GetRules
+        request: GetRulesRequest
+        response: GetRulesResponse
+        cache_ttl: 300
+      - name: GetStyleExamples
+        request: GetStyleExamplesRequest
+        response: GetStyleExamplesResponse
+        cache_ttl: 86400
+
+  llm_gateway_http:
+    endpoints:
+      - path: /generate
+        method: POST
+        request: GenerateRequest
+        response: GenerateResponse
+        timeout_ms: 5000
+      - path: /health
+        method: GET
+        response: HealthStatus
+
+dependencies:
+  infrastructure:
+    - id: qdrant
+      required: true
+      fallback: "false"
+    - id: ollama
+      required: true
+      fallback: "openai_api"
+    - id: redis
+      required: true
+      fallback: "memory_cache"
+
+configuration:
+  environment_variables:
+    - ORCHESTRATOR_PORT=8001
+    - RETRIEVER_PORT=8002
+    - LLM_GATEWAY_PORT=8003
+    - REDIS_URL=redis://redis:6379
+    - QDRANT_URL=qdrant:6334
+    - OLLAMA_URL=http://ollama:11434
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+    - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+
+  models:
+    fast:
+      name: "llama3.2:3b"
+      provider: "ollama"
+      target_latency_ms: 200
+      max_tokens: 2048
+    balanced:
+      name: "qwen2.5:7b"
+      provider: "ollama"
+      target_latency_ms: 500
+      max_tokens: 4096
+    powerful:
+      name: "mixtral:8x7b"
+      provider: "ollama"
+      target_latency_ms: 1500
+      max_tokens: 8192
+    fallback:
+      name: "gpt-4o"
+      provider: "openai"
+      target_latency_ms: 2000
+      max_tokens: 16384
