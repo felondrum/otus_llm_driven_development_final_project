@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package chameleon.core.v1;
+
+import "google/protobuf/empty.proto";
+import "common.proto";
+
+service RetrieverService {
+    rpc GetProfile(GetProfileRequest) returns (UserProfile);
+    rpc GetRules(GetRulesRequest) returns (GetRulesResponse);
+    rpc GetStyleExamples(GetStyleExamplesRequest) returns (GetStyleExamplesResponse);
+    rpc SearchRules(SearchRulesRequest) returns (SearchRulesResponse);
+    rpc SearchCulture(SearchCultureRequest) returns (SearchCultureResponse);
+    rpc HealthCheck(google.protobuf.Empty) returns (HealthStatus);
+}
+
+message GetProfileRequest {
+    string user_id = 1;
+    bool include_history = 2;
+    int32 cache_ttl = 3;  // Cache TTL in seconds (3600)
+}
+
+message UserProfile {
+    string user_id = 1;
+    string full_name = 2;
+    string role = 3;
+    string department = 4;
+    HonorificType honorific_type = 5;
+    CommunicationMode communication_mode = 6;
+    repeated string known_triggers = 7;
+    repeated float adaptive_history_vector = 8;
+    int64 last_updated = 9;
+}
+
+enum HonorificType {
+    HONORIFIC_UNSPECIFIED = 0;
+    FIRST_NAME = 1;
+    FIRST_LAST = 2;
+    PATRONYMIC = 3;
+    TITLE_LAST = 4;
+}
+
+enum CommunicationMode {
+    MODE_UNSPECIFIED = 0;
+    FORMAL = 1;
+    INFORMAL = 2;
+    TECHNICAL = 3;
+    DIPLOMATIC = 4;
+}
+
+message GetRulesRequest {
+    string sender_role = 1;
+    string recipient_role = 2;
+    string message_text = 3;
+    int32 limit = 4;
+    int32 cache_ttl = 5;  // Cache TTL in seconds (300)
+}
+
+message GetRulesResponse {
+    repeated CorporateRule rules = 1;
+}
+
+message CorporateRule {
+    string rule_id = 1;
+    string category = 2;
+    int32 priority = 3;
+    string transformation_prompt = 4;
+    string example_original = 5;
+    string example_adapted = 6;
+    float relevance_score = 7;
+}
+
+message GetStyleExamplesRequest {
+    string style_name = 1;
+    int32 sample_count = 2;
+    int32 cache_ttl = 3;  // Cache TTL in seconds (86400)
+}
+
+message GetStyleExamplesResponse {
+    repeated StyleExample examples = 1;
+}
+
+message StyleExample {
+    string style_name = 1;
+    string author = 2;
+    string sample_text = 3;
+    map<string, string> metadata = 4;
+}
+
+message SearchRulesRequest {
+    string query_text = 1;
+    string sender_role = 2;
+    string recipient_role = 3;
+    repeated string categories = 4;
+    int32 limit = 5;
+}
+
+message SearchRulesResponse {
+    repeated CorporateRule rules = 1;
+}
+
+message SearchCultureRequest {
+    string query_text = 1;
+    int32 limit = 2;
+}
+
+message CultureChunk {
+    string text = 1;
+    string section_title = 2;
+    int32 section_level = 3;
+    float relevance_score = 4;
+}
+
+message SearchCultureResponse {
+    repeated CultureChunk chunks = 1;
+}
+

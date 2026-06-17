@@ -1,0 +1,20 @@
+[
+  {
+    "rule_id": "rule_address_formal",
+    "category": "address",
+    "priority": 10,
+    "condition": "recipient_role IN ['team_lead', 'director']",
+    "transformation": "replace 'ты' with 'вы', add patronymic",
+    "example_original": "Петя, ты...",
+    "example_adapted": "Петр Иванович, вы..."
+  },
+  {
+    "rule_id": "rule_no_blame",
+    "category": "tone",
+    "priority": 9,
+    "condition": "contains 'сломал' OR 'баг' OR 'ошибка'",
+    "transformation": "rephrase as observation, not blame",
+    "example_original": "ты сломал сборку",
+    "example_adapted": "возникла проблема со сборкой"
+  }
+]

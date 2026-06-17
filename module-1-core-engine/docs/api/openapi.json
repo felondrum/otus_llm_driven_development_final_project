@@ -1,0 +1,245 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Chameleon LLM Gateway",
+    "description": "LLM model router and cache with fallback support",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8003",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Check the health status of the LLM Gateway service",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "Health status response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/generate": {
+      "post": {
+        "summary": "Generate Text",
+        "description": "Generate text using appropriate LLM model with fallback support",
+        "operationId": "generate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Generation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models": {
+      "get": {
+        "summary": "Get Available Models",
+        "description": "Get list of available LLM models",
+        "operationId": "getModels",
+        "responses": {
+          "200": {
+            "description": "Available models",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GenerateRequest": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Text prompt for generation",
+            "minLength": 1,
+            "maxLength": 10000
+          },
+          "complexity": {
+            "type": "integer",
+            "enum": [1, 2, 3],
+            "default": 2,
+            "description": "Request complexity (1=fast, 2=balanced, 3=powerful)"
+          },
+          "config": {
+            "$ref": "#/components/schemas/GenerationConfig"
+          }
+        }
+      },
+      "GenerationConfig": {
+        "type": "object",
+        "properties": {
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 0.7,
+            "description": "Temperature for text generation"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8192,
+            "default": 2048,
+            "description": "Maximum tokens in response"
+          },
+          "stream": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming mode"
+          },
+          "style": {
+            "type": "string",
+            "enum": ["chekhov", "dovlatov", "pelevin", "ilfpetrov"],
+            "description": "Writing style for adaptation"
+          }
+        }
+      },
+      "GenerateResponse": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Generated text"
+          },
+          "model_used": {
+            "type": "string",
+            "description": "Model identifier used for generation"
+          },
+          "complexity_used": {
+            "type": "integer",
+            "description": "Complexity level used"
+          },
+          "token_usage": {
+            "$ref": "#/components/schemas/TokenUsage"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "description": "Generation latency in milliseconds"
+          },
+          "from_cache": {
+            "type": "boolean",
+            "description": "Indicates if response was from cache"
+          }
+        }
+      },
+      "TokenUsage": {
+        "type": "object",
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "description": "Number of prompt tokens"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "description": "Number of completion tokens"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "description": "Total token count"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["healthy", "degraded", "unhealthy"],
+            "description": "Service health status"
+          },
+          "version": {
+            "type": "string",
+            "description": "API version"
+          },
+          "checks": {
+            "type": "object",
+            "description": "Component health checks",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string",
+            "description": "Error message"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "LLM Gateway",
+      "description": "LLM model routing and generation"
+    },
+    {
+      "name": "Health",
+      "description": "Service health endpoints"
+    }
+  ]
+}

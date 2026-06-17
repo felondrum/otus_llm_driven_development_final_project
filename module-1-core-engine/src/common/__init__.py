@@ -1,1 +1,1 @@
-# Common package
+# Common module

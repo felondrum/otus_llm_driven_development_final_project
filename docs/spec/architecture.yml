@@ -7,6 +7,7 @@ modules:
     name: "Core Engine"
     responsibility: "Адаптация текста через LLM, RAG поиск"
     language: "Python 3.11"
+    package_manager: poetry
     port: 8001 (gRPC)
     dependencies:
       - qdrant

@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Log files
+*.log
+logs/
+
+# Generated protobuf code (optional - can be committed)
+# chameleon/core/v1/*_pb2.py
+# chameleon/core/v1/*_pb2_grpc.py
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+.dockerignore

@@ -39,9 +39,10 @@ tech_stack:
     - React 18
     - WebSocket
   ai:
-    - Ollama (llama3.2:3b, qwen2.5:7b, mixtral:8x7b)
+    - Ollama (qwen2.5:1.5b)
+    - Yandex LLM API
     - Qdrant (vector DB)
-    - Langfuse (observability)
+    - Langfuse (local observability)
   data:
     - PostgreSQL 15
     - Redis 7

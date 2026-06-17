@@ -1,1 +1,50 @@
-# Конфигурация development
+server:
+  port: 8001
+  host: 0.0.0.0
+  debug: true
+
+services:
+  redis:
+    host: redis
+    port: 6379
+    db: 0
+    socket_timeout: 5
+    password: redis123
+  qdrant:
+    host: localhost
+    port: 6333
+    grpc_port: 6334
+    timeout: 10
+  ollama:
+    host: ollama
+    port: 11434
+    timeout: 30
+  langfuse:
+    host: http://langfuse-web:3000
+    enabled: true
+
+logging:
+  level: DEBUG
+  format: json
+
+cache:
+  default_ttl: 3600  # 1 hour
+  max_size: 10000
+
+cache_ttl:
+  profile: 3600      # 1 hour
+  rules: 300         # 5 minutes
+  style_examples: 86400  # 24 hours
+  adaptation: 3600   # 1 hour
+
+retries:
+  max_attempts: 3
+  initial_backoff_ms: 100
+  max_backoff_ms: 10000
+  backoff_multiplier: 2.0
+
+fallback:
+  chain:
+    - ollama:qwen2.5:1.5b
+    - yandex:ya-llm
+  return_original_on_fallback: true

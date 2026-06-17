@@ -1,1 +1,1 @@
-# Retriever package
+# Retriever module

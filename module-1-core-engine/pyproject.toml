@@ -1,1 +1,41 @@
 # Python проект
+
+[tool.poetry]
+name = "chameleon-core-engine"
+version = "1.0.0"
+description = "Core Engine for Chameleon Chat - Orchestrator + Retriever + LLM Gateway"
+authors = ["Chameleon Team"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115"
+uvicorn = "^0.32"
+grpcio = "^1.68"
+grpcio-tools = "^1.68"
+qdrant-client = "1.8.0"
+redis = "^5.2"
+pydantic = "^2.0"
+pyyaml = "^6.0.1"
+aiohttp = "^3.9"
+langfuse = "3.9.3"
+prometheus-client = "^0.20"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4"
+pytest-asyncio = "^0.23"
+black = "^24.0"
+ruff = "^0.5"
+pytest-cov = "^7.1.0"
+pytest-mock = "^3.12"
+httpx = "^0.27"
+pytest-docker = "^2.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

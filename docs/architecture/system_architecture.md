@@ -47,7 +47,7 @@ flowchart LR
 | Входит в систему | Не входит (внешнее) |
 |------------------|---------------------|
 | Адаптация текста через LLM | Аутентификация пользователей (stub) |
-| RAG поиск правил и стилей | Хранение истории чатов (только аналитика) |
+| RAG поиск профилей, правил, стилей и культуры | Хранение истории чатов (только аналитика) |
 | Аналитика оригинальных сообщений | Интеграция с существующими мессенджерами |
 | Администрирование RAG данных | Видео/аудио звонки |
 | Дашборд метрик | Мобильные приложения (только web) |
@@ -65,8 +65,9 @@ flowchart LR
 | FR-3 | Хранить профили пользователей для персонализации | Высокий |
 | FR-4 | Загружать корпоративные правила без перезапуска | Средний |
 | FR-5 | Применять литературные стили (Чехов, Довлатов...) | Средний |
-| FR-6 | Анализировать оригиналы для самообучения | Низкий (прототип) |
-| FR-7 | Голосовой ввод/вывод (бонус) | Низкий |
+| FR-6 | RAG для корпоративной культуры | Средний |
+| FR-7 | Анализировать оригиналы для самообучения | Низкий (прототип) |
+| FR-8 | Голосовой ввод/вывод (бонус) | Низкий |
 
 ### 3.2. Нефункциональные требования
 
@@ -121,8 +122,8 @@ flowchart TB
     end
     
     subgraph AI["AI & Вычисления"]
-        Ollama[Ollama\nLocal Models]
-        API[External API\nOpenAI/Anthropic]
+        Ollama[Ollama\nqwen2.5:1.5b]
+        API[External API\nYandex LLM]
     end
     
     subgraph Async["Асинхронная обработка"]
@@ -291,10 +292,8 @@ flowchart TB
         end
         
         subgraph Providers
-            OllamaFast[Ollama Provider\nllama3.2:3b]
-            OllamaBalanced[Ollama Provider\nqwen2.5:7b]
-            OllamaPowerful[Ollama Provider\nmixtral:8x7b]
-            OpenAIProvider[OpenAI Provider\ngpt-4o]
+            OllamaBase[Ollama Provider\nqwen2.5:1.5b]
+            YandexProvider[Yandex Provider\nya-llm]
         end
         
         subgraph Cache
@@ -398,11 +397,18 @@ Domain Model:
 
 ### 6.2. Схема Qdrant коллекций
 
-| Коллекция | Векторная размерность | Индекс | Поля фильтрации |
-|-----------|----------------------|--------|-----------------|
-| **user_profiles** | 768 | HNSW | `user_id` (keyword, уникальный), `role`, `department` |
-| **corporate_rules** | 768 | HNSW | `role_from`, `role_to`, `category`, `priority` |
-| **artistic_styles** | 768 | HNSW | `style_name`, `author`, `emotion_tags` |
+| Коллекция | Векторная размерность | Индекс | Поля фильтрации | Использование |
+|-----------|----------------------|--------|-----------------|---------------|
+| **user_profiles** | 768 | HNSW | `user_id` (keyword, уникальный), `role`, `department` | Точный поиск профилей |
+| **corporate_rules** | 768 | HNSW | `role_from`, `role_to`, `category`, `priority` | Векторный поиск правил |
+| **artistic_styles** | 768 | HNSW | `style_name`, `author`, `emotion_tags` | Гибридный поиск стилей |
+| **corporate_culture** | 768 | HNSW | `section_title`, `section_level` | RAG для корпоративной культуры |
+
+**RAG пайплайн:**
+1. **Profile lookup** - точный поиск по `user_id` в коллекции `user_profiles`
+2. **Rules search** - векторный поиск в коллекции `corporate_rules` с фильтрацией по `role_from`, `role_to`
+3. **Styles search** - гибридный поиск в коллекции `artistic_styles` с ключевыми словами
+4. **Culture search** - векторный поиск в коллекции `corporate_culture` с фильтрацией по `section_level`
 
 ### 6.3. Схема PostgreSQL (метаданные)
 
@@ -490,7 +496,7 @@ User ← Chat UI ← API Gateway ← Orchestrator ← Cache
 ```
 User → Chat UI → API Gateway → Orchestrator → Cache (miss)
                             ↓
-                      Retriever (profile, rules, style)
+                      Retriever (profile, rules, style, culture)
                             ↓
                       LLM Gateway (ollama or API)
                             ↓
@@ -500,6 +506,12 @@ User ← Chat UI ← API Gateway ← Orchestrator ← Cache
                             ↓
                       Queue → Black Box (async)
 ```
+
+**RAG Коллекции в Qdrant:**
+- `user_profiles` - профили пользователей (vector: 768 dims)
+- `corporate_rules` - корпоративные правила (vector: 768 dims)
+- `artistic_styles` - литературные стили (vector: 768 dims)
+- `corporate_culture` - корпоративная культура (vector: 768 dims)
 
 ### 7.3. State Machine — Orchestrator
 
@@ -573,13 +585,13 @@ stateDiagram-v2
 **Ресурсы:**
 | Сервис | CPU | RAM | GPU | Storage |
 |--------|-----|-----|-----|---------|
-| Ollama | 4 cores | 16 GB | 1x NVIDIA (16GB) | 20 GB |
+| Ollama | 2 cores | 8 GB | - | 10 GB |
 | Qdrant | 2 cores | 4 GB | - | 10 GB |
 | Orchestrator | 2 cores | 2 GB | - | - |
 | LLM Gateway | 1 core | 1 GB | - | - |
 | Chat Frontend | 1 core | 512 MB | - | - |
 | PostgreSQL | 1 core | 1 GB | - | 10 GB |
-| Total | ~12 cores | ~25 GB | ~16 GB | ~50 GB |
+| Total | ~9 cores | ~16 GB | 0 GB | ~40 GB |
 
 ### 8.2. Масштабирование (перспектива)
 
@@ -653,12 +665,11 @@ flowchart TB
 |-----------|----------------|-----------|
 | API Gateway → Orchestrator | p95 < 50 ms | gRPC latency |
 | Orchestrator → Retriever | p95 < 150 ms (3 parallel calls) | gRPC + RAG |
-| Orchestrator → LLM (fast) | p95 < 200 ms | Ollama + cache |
-| Orchestrator → LLM (balanced) | p95 < 500 ms | Ollama |
-| Orchestrator → LLM (powerful) | p95 < 1500 ms | Ollama or API |
+| Orchestrator → LLM (base) | p95 < 300 ms | Ollama qwen2.5:1.5b + cache |
+| Orchestrator → LLM (fallback) | p95 < 2000 ms | Yandex LLM API |
 | **End-to-end (cache hit)** | **p95 < 300 ms** | User experience |
-| **End-to-end (cache miss, fast)** | **p95 < 600 ms** | User experience |
-| **End-to-end (cache miss, powerful)** | **p95 < 2000 ms** | Acceptable with indicator |
+| **End-to-end (cache miss, base)** | **p95 < 600 ms** | User experience |
+| **End-to-end (cache miss, fallback)** | **p95 < 2500 ms** | Acceptable with indicator |
 
 **Бюджет задержки E2E (cache miss, balanced):**
 - Network (browser → gateway): 50 ms
@@ -683,10 +694,8 @@ flowchart TB
 | Redis | 99.5% | Single node + RDB snapshots |
 
 **Graceful degradation chain:**
-1. Ollama local (fast) → timeout → Ollama (balanced)
-2. Ollama (balanced) → timeout → Ollama (powerful)
-3. Ollama (powerful) → timeout → OpenAI API
-4. OpenAI API → timeout/error → **Return original message** (with warning)
+1. Ollama qwen2.5:1.5b → timeout → Yandex LLM
+2. Yandex LLM → timeout/error → **Return original message** (with warning)
 
 ### 9.3. Масштабируемость (Scalability)
 
@@ -698,10 +707,10 @@ flowchart TB
 | Retriever | ❌ Нет (зависит от Qdrant) | Нет (кеширует эмбеддинги) | - |
 | Black Box | ✅ Да | Да, до 3 (партиции по user_id) | I/O bound |
 | Qdrant | ❌ Нет (stateful) | Кластеризация в будущем | Disk I/O |
-| Ollama | ❌ Нет (GPU bound) | Model parallelism | GPU memory |
+| Ollama | ❌ Нет (CPU bound) | Multi-process | Memory |
 
 **Точки узких мест (bottlenecks):**
-1. **Ollama GPU memory** — одна модель на GPU, максимум 2-3 параллельных запроса
+1. **Ollama memory** — одна модель, максимум 2-3 параллельных запроса
 2. **Qdrant disk I/O** — при больших коллекциях (> 1M векторов)
 3. **Redis memory** — при большом кэше адаптаций
 
@@ -713,7 +722,7 @@ flowchart TB
 |-------|-----------|--------------|
 | **Metrics** | Prometheus + Grafana | QPS, latency, error rate, cache hit ratio, GPU usage |
 | **Logs** | ELK / Loki (JSON logs to stdout) | Каждый запрос (message_id), ошибки, fallback события |
-| **Traces** | Langfuse + OpenTelemetry | Полная трассировка: от UI до LLM, с затратами токенов |
+| **Traces** | Langfuse (local) + OpenTelemetry | Полная трассировка: от UI до LLM, с затратами токенов |
 
 **Ключевые дашборды:**
 1. **System Health** — статус всех сервисов, CPU/RAM, QPS
@@ -745,7 +754,7 @@ flowchart TB
 | **ADR-005** | 2024-01-17 | Не использовать Rocket.Chat, свой минимальный чат | Полный контроль над каждым сообщением | Интеграция с существующим | + время на UI, но -10 хаков |
 | **ADR-006** | 2024-01-17 | Хранить оригиналы только в Black Box, не в чате | Приватность и этика | Показывать оригинал всем | Невозможно "посмотреть, что было" в чате |
 | **ADR-007** | 2024-01-18 | Redis для кэша И очереди | Минимизация зависимостей | RabbitMQ + Memcached | Риск коллизии (кэш vs очередь), но проще девопс |
-| **ADR-008** | 2024-01-18 | Fallback chain: local → API → original | Максимальная отказоустойчивость | Только local или только API | Дорого при частых fallback на API |
+| **ADR-009** | 2024-06-11 | Упростить для локального тестирования | Одна локальная модель qwen2.5:1.5b + Yandex LLM API | 3 локальные + OpenAI | Простота на слабых машинах, lower RAM usage |
 
 ---
 

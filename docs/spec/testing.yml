@@ -4,6 +4,7 @@ type: testing_strategy
 
 levels:
   unit:
+    package_manager: poetry
     framework: pytest
     coverage_target: 85
     per_module:
@@ -30,11 +31,13 @@ levels:
           - Database
 
   integration:
+    package_manager: poetry
     framework: pytest
     services_required:
       - qdrant (test container)
       - redis (test container)
-      - ollama (with tiny model)
+      - ollama (with qwen2.5:1.5b)
+      - yandex_llm (test mock)
     test_scenarios:
       - name: "full_adaptation_flow"
         steps:
@@ -51,7 +54,7 @@ levels:
         steps:
           - "Kill ollama"
           - "Send message"
-          - "Verify fallback to OpenAI"
+          - "Verify fallback to Yandex LLM"
       - name: "admin_upload_flow"
         steps:
           - "Upload document"
@@ -59,6 +62,7 @@ levels:
           - "Verify search finds new document"
 
   rag_evaluation:
+    package_manager: poetry
     framework: ragas
     dataset: tests/ragas/benchmark.json
     size: 100
@@ -96,6 +100,7 @@ levels:
         target_error_rate: 0.01
 
   e2e:
+    package_manager: poetry
     framework: playwright + pytest
     browser: chromium
     scenarios:

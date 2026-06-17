@@ -16,6 +16,120 @@
 
 ---
 
+## Запуск системы
+
+### Требования
+
+- Docker (версия 20+)
+- Docker Compose (версия 2+)
+- Python 3.11+ (для локальной разработки)
+- Poetry (для управления зависимостями)
+
+### Шаг 1: Настройка .env файла
+
+Скопируйте `.env.example` в `.env` и обновите ключи:
+
+```bash
+cp .env.example .env
+```
+
+Отредактируйте `.env` и укажите свои ключи:
+
+- `LANGFUSE_PUBLIC_KEY` - ваш публичный ключ Langfuse
+- `LANGFUSE_SECRET_KEY` - ваш секретный ключ Langfuse
+- `YA_LLM_KEY` - API ключ Yandex Cloud
+- `YA_HOST_KEY` - ID папки в Yandex Cloud
+
+> 💡 Ключи Langfuse можно получить на http://localhost:3000 после первого запуска
+
+### Шаг 2: Запуск
+
+#### Вариант 1: Использование Make (рекомендуется)
+
+```bash
+# Запустить все сервисы
+make up
+
+# Остановить все сервисы
+make down
+
+# Полная пересборка (при смене API ключей)
+make rebuild
+
+# Быстрая пересборка
+make rebuild-fast
+
+# Показать логи
+make logs
+
+# Удалить volume
+make clean
+```
+
+#### Вариант 2: Использование скрипта
+
+```bash
+# Запустить все сервисы
+./scripts/docker-run.sh
+
+# Остановить все сервисы
+docker-compose down
+```
+
+#### Вариант 3: Использование Docker Compose напрямую
+
+```bash
+# Запустить все сервисы
+docker-compose up -d
+
+# Остановить все сервисы
+docker-compose down
+
+# Пересобрать и запустить
+docker-compose build --no-cache && docker-compose up -d
+```
+
+### Шаг 3: Проверка
+
+После запуска проверьте доступность сервисов:
+
+```bash
+# Статус контейнеров
+docker-compose ps
+
+# Логи всех сервисов
+docker-compose logs -f
+
+# Логи конкретного сервиса
+docker-compose logs -f orchestrator
+```
+
+### Доступные сервисы
+
+| Сервис | URL | Порт | Описание |
+|--------|-----|------|----------|
+| Langfuse UI | http://localhost:3000 | 3000 | Веб-интерфейс трейсинга |
+| Orchestrator | localhost:8001 | 8001 | gRPC оркестратор |
+| Retriever | localhost:8002 | 8002 | gRPC RAG поиск |
+| LLM Gateway | localhost:8003 | 8003 | HTTP LLM прокси |
+| ClickHouse | http://localhost:8123 | 8123 | База метрик |
+| MinIO Console | http://localhost:9001 | 9001 | Хранилище файлов |
+
+### Остановка и очистка
+
+```bash
+# Остановить сервисы (данные сохраняются)
+docker-compose down
+
+# Остановить и удалить volume (данные будут потеряны!)
+docker-compose down -v
+
+# Или используйте Make
+make clean
+```
+
+---
+
 ## 2. System Context (Контекст системы)
 
 ### 2.1. Диаграмма контекста C4
@@ -713,7 +827,7 @@ flowchart TB
 |-------|-----------|--------------|
 | **Metrics** | Prometheus + Grafana | QPS, latency, error rate, cache hit ratio, GPU usage |
 | **Logs** | ELK / Loki (JSON logs to stdout) | Каждый запрос (message_id), ошибки, fallback события |
-| **Traces** | Langfuse + OpenTelemetry | Полная трассировка: от UI до LLM, с затратами токенов |
+| **Traces** | Langfuse (local) + OpenTelemetry | Полная трассировка: от UI до LLM, с затратами токенов |
 
 **Ключевые дашборды:**
 1. **System Health** — статус всех сервисов, CPU/RAM, QPS

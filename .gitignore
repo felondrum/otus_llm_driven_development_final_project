@@ -42,7 +42,7 @@ MANIFEST
 # Environment variables
 .env
 .env.*
-!.env.example
+!*.env.example
 
 # Logs
 *.log
@@ -115,3 +115,5 @@ notebooks/output/
 # Shared stubs (может генерироваться)
 shared/src/grpc_stubs/*.py
 shared/src/grpc_stubs/*.pyi
+/.gigacode/
+/.gigacode/plans/
