@@ -1,1 +1,1 @@
-# LLM gateway package
+# LLM Gateway module

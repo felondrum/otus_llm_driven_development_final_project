@@ -1,0 +1,82 @@
+[
+  {
+    "user_id": "alex_i",
+    "full_name": "Иванов Алексей Петрович",
+    "role": "engineer",
+    "department": "backend",
+    "honorific_type": "first_name",
+    "communication_mode": "informal",
+    "known_triggers": ["deadline", "bug", "code_review"]
+  },
+  {
+    "user_id": "petr_s",
+    "full_name": "Смирнов Петр Иванович",
+    "role": "team_lead",
+    "department": "backend",
+    "honorific_type": "patronymic",
+    "communication_mode": "formal",
+    "known_triggers": ["blame", "deadline"]
+  },
+  {
+    "user_id": "anna_k",
+    "full_name": "Ковалева Анна Сергеевна",
+    "role": "director",
+    "department": "engineering",
+    "honorific_type": "patronymic",
+    "communication_mode": "formal",
+    "known_triggers": ["money", "deadline", "blame"]
+  },
+  {
+    "user_id": "nonexistent_user_999999",
+    "full_name": "Test User 999999",
+    "role": "employee",
+    "department": "unknown",
+    "honorific_type": "first_name",
+    "communication_mode": "informal"
+  },
+  {
+    "user_id": "maria_s",
+    "full_name": "Смирнова Мария Дмитриевна",
+    "role": "hr_manager",
+    "department": "hr",
+    "honorific_type": "patronymic",
+    "communication_mode": "formal",
+    "known_triggers": ["salary", "vacation", "review"]
+  },
+  {
+    "user_id": "dmitry_k",
+    "full_name": "Кузнецов Дмитрий Александрович",
+    "role": "senior_engineer",
+    "department": "backend",
+    "honorific_type": "first_name",
+    "communication_mode": "technical",
+    "known_triggers": ["code_review", "deployment", "tech_debt"]
+  },
+  {
+    "user_id": "elena_v",
+    "full_name": "Воронова Елена Николаевна",
+    "role": "team_lead",
+    "department": "frontend",
+    "honorific_type": "patronymic",
+    "communication_mode": "collaborative",
+    "known_triggers": ["team_conflict", "deadline", "resources"]
+  },
+  {
+    "user_id": "sergey_m",
+    "full_name": "Михайлов Сергей Олегович",
+    "role": "intern",
+    "department": "marketing",
+    "honorific_type": "first_name",
+    "communication_mode": "informal",
+    "known_triggers": ["learning", "feedback", "mentorship"]
+  },
+  {
+    "user_id": "olga_a",
+    "full_name": "Алексеева Ольга Викторовна",
+    "role": "director",
+    "department": "sales",
+    "honorific_type": "title",
+    "communication_mode": "formal",
+    "known_triggers": ["revenue", "targets", "clients"]
+  }
+]

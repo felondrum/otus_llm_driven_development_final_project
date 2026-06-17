@@ -44,8 +44,8 @@ flowchart LR
 | **Профили пользователей** | Admin UI / HR | Qdrant | HTTP/gRPC | При изменении |
 | **Корпоративные правила** | Admin UI (файлы) | Qdrant | gRPC | Ручная загрузка |
 | **Литературные стили** | Admin UI (книги) | Qdrant | gRPC | Ручная загрузка |
-| **Метрики LLM** | LLM Gateway | Langfuse | HTTP | Каждый вызов |
-| **Трассировки** | Все сервисы | Langfuse | HTTP | Каждый запрос |
+| **Метрики LLM** | LLM Gateway | Langfuse (local) | HTTP | Каждый вызов |
+| **Трассировки** | Все сервисы | Langfuse (local) | HTTP | Каждый запрос |
 | **Аналитика (сырая)** | Black Box | PostgreSQL | SQL | Каждое сообщение |
 | **Аналитика (агрегаты)** | PostgreSQL | Dashboard | SQL | Каждый запрос |
 | **Тестовые датасеты** | CI Pipeline | RAGas Evaluator | File | При каждом PR |

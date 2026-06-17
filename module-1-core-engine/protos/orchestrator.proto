@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package chameleon.core.v1;
+
+import "google/protobuf/empty.proto";
+import "common.proto";
+
+service OrchestratorService {
+    rpc ProcessMessage(ProcessMessageRequest) returns (ProcessMessageResponse);
+    rpc HealthCheck(google.protobuf.Empty) returns (HealthStatus);
+}
+
+message ProcessMessageRequest {
+    string message_id = 1;
+    string sender_id = 2;
+    string recipient_id = 3;
+    string room_id = 4;
+    string text = 5;
+    optional string style_name = 6;
+    map<string, string> metadata = 7;
+}
+
+message ProcessMessageResponse {
+    string adapted_text = 1;
+    bool was_adapted = 2;
+    float confidence = 3;
+    string model_used = 4;
+    int64 processing_time_ms = 5;
+    repeated string rules_applied = 6;
+    AdaptationMetadata adaptation_metadata = 7;
+}
+
+message AdaptationMetadata {
+    bool from_cache = 1;
+    bool fallback_used = 2;
+    string fallback_reason = 3;
+    int32 tokens_prompt = 4;
+    int32 tokens_completion = 5;
+}

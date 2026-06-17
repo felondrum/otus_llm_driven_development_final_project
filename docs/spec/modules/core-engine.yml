@@ -3,11 +3,12 @@ schema: 1.0.0
 type: module
 id: module-1-core-engine
 name: "Core Engine"
+package_manager: poetry
 
 components:
   - id: orchestrator
     name: "Orchestrator Service"
-    responsibility: "Координация адаптации сообщений"
+    responsibility: "Координация адаптации сообщений с учетом профилей, правил и культур"
     technology: "Python/FastAPI + gRPC"
     internal_components:
       - CacheManager (Redis)
@@ -19,25 +20,27 @@ components:
 
   - id: retriever
     name: "RAG Retriever Service"
-    responsibility: "Поиск профилей, правил, стилей в Qdrant"
+    responsibility: "Поиск профилей, правил, стилей и корпоративной культуры в Qdrant"
     technology: "Python + Qdrant client"
     internal_components:
       - ExactLookup (profiles)
       - VectorSearch (rules)
       - HybridSearch (styles)
       - EmbeddingClient (Ollama)
-    stateful: true #(depends on Qdrant)
+      - CultureSearch (RAG chunks)
+    stateful: true (depends on Qdrant)
     scale: vertical only
 
   - id: llm-gateway
     name: "LLM Gateway"
-    responsibility: "Маршрутизация между LLM моделями"
-    technology: "Python + aiohttp"
+    responsibility: "Маршрутизация между LLM моделями с circuit breaker"
+    technology: "Python + aiohttp + FastAPI"
     internal_components:
       - ModelRouter
-      - CircuitBreaker
+      - CircuitBreaker (failure_threshold: 5, recovery_timeout: 30s)
       - ResponseCache
       - FallbackHandler
+      - LoadBalancer
     stateful: false
     scale: horizontal (2+ replicas)
 
@@ -50,9 +53,11 @@ apis:
         response: ProcessMessageResponse
         timeout_ms: 5000
         retry: 3
+        description: "Process incoming message and return adapted version with RAG context"
       - name: HealthCheck
         request: Empty
         response: HealthStatus
+        description: "Check service health status"
 
   retriever_grpc:
     service: RetrieverService
@@ -61,14 +66,29 @@ apis:
         request: GetProfileRequest
         response: UserProfile
         cache_ttl: 3600
+        description: "Get user profile by user_id (exact lookup)"
       - name: GetRules
         request: GetRulesRequest
         response: GetRulesResponse
         cache_ttl: 300
+        description: "Get corporate rules by sender/recipient roles"
       - name: GetStyleExamples
         request: GetStyleExamplesRequest
         response: GetStyleExamplesResponse
         cache_ttl: 86400
+        description: "Get examples of artistic styles"
+      - name: SearchRules
+        request: SearchRulesRequest
+        response: SearchRulesResponse
+        description: "Search rules by query text (vector search)"
+      - name: SearchCulture
+        request: SearchCultureRequest
+        response: SearchCultureResponse
+        description: "Search corporate culture chunks (RAG for culture)"
+      - name: HealthCheck
+        request: Empty
+        response: HealthStatus
+        description: "Check service health status"
 
   llm_gateway_http:
     endpoints:
@@ -77,21 +97,73 @@ apis:
         request: GenerateRequest
         response: GenerateResponse
         timeout_ms: 5000
+        description: "Generate text with circuit breaker protection"
       - path: /health
         method: GET
+        response: HealthStatus
+        description: "Health check with circuit breaker status"
+      - path: /models
+        method: GET
+        response: Dict[str, str]
+        description: "Get list of available models"
+      - path: /metrics
+        method: GET
+        response: MetricsResponse
+        description: "Prometheus metrics including circuit breaker state"
+
+  llm_gateway_grpc:
+    service: LLMGatewayService
+    methods:
+      - name: Generate
+        request: GenerateRequest
+        response: GenerateResponse
+      - name: StreamGenerate
+        request: GenerateRequest
+        response: stream GenerateResponse
+      - name: GetModelStatus
+        request: Empty
+        response: ModelStatusResponse
+      - name: HealthCheck
+        request: Empty
         response: HealthStatus
 
 dependencies:
   infrastructure:
     - id: qdrant
       required: true
-      fallback: "false"
+      collections:
+        - user_profiles (vector: 768 dims, HNSW)
+        - corporate_rules (vector: 768 dims, HNSW)
+        - artistic_styles (vector: 768 dims, HNSW)
+        - corporate_culture (vector: 768 dims, HNSW)
+      fallback: "none"
     - id: ollama
       required: true
-      fallback: "openai_api"
+      models:
+        - qwen2.5:1.5b (primary)
+        - llama3.2:3b (fallback)
+      fallback: "yandex_llm"
     - id: redis
       required: true
-      fallback: "memory_cache"
+      usages:
+        - Cache (orchestrator adaptations)
+        - Cache (LLM generations)
+      fallback: "none"
+    - id: langfuse
+      required: false
+      fallback: "disabled"
+      description: "Observability with distributed tracing"
+
+  fallback_chain:
+    - provider: ollama
+      model: qwen2.5:1.5b
+      priority: 1
+      circuit_breaker_threshold: 5
+      description: "Fast local model (primary)"
+    - provider: yandex
+      model: ya-llm
+      priority: 2
+      description: "Fallback API (when local unavailable)"
 
 configuration:
   environment_variables:
@@ -101,28 +173,41 @@ configuration:
     - REDIS_URL=redis://redis:6379
     - QDRANT_URL=qdrant:6334
     - OLLAMA_URL=http://ollama:11434
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-    - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-    - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+    - YA_LLM_KEY=${YA_LLM_KEY}
+    - YA_HOST_KEY=${YA_HOST_KEY}
+    - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-local-key}
+    - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-local-secret}
+    - LANGFUSE_HOST=${LANGFUSE_HOST:-http://localhost:5000}
+
+  cache_ttl:
+    profile: 3600      # 1 hour
+    rules: 300         # 5 minutes
+    style_examples: 86400  # 24 hours
+    adaptation: 3600   # 1 hour
+
+  circuit_breaker:
+    failure_threshold: 5
+    recovery_timeout: 30
+    description: "Number of failures before opening circuit and recovery timeout in seconds"
 
   models:
-    fast:
-      name: "llama3.2:3b"
+    primary:
+      name: "qwen2.5:1.5b"
       provider: "ollama"
-      target_latency_ms: 200
+      target_latency_ms: 300
       max_tokens: 2048
-    balanced:
-      name: "qwen2.5:7b"
-      provider: "ollama"
-      target_latency_ms: 500
-      max_tokens: 4096
-    powerful:
-      name: "mixtral:8x7b"
-      provider: "ollama"
-      target_latency_ms: 1500
-      max_tokens: 8192
+      priority: 1
+      description: "Fast local model for primary processing"
     fallback:
-      name: "gpt-4o"
-      provider: "openai"
+      name: "ya-llm"
+      provider: "yandex"
       target_latency_ms: 2000
-      max_tokens: 16384
+      max_tokens: 4096
+      priority: 2
+      description: "Fallback API when local model is unavailable or circuit is open"
+
+  demo_data:
+    profiles: demo_data/profiles.json
+    rules: demo_data/rules.json
+    styles: demo_data/styles.json
+    culture: demo_data/corporate_culture.md

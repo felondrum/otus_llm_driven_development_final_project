@@ -136,7 +136,7 @@ chameleon-chat/
 │   │       ├── schemas.py
 │   │       ├── logging.py
 │   │       ├── metrics.py             # Prometheus метрики
-│   │       └── langfuse_integration.py
+│   │       └── langfuse_integration.py - Локальный Langfuse client (localhost:5000)
 │   │
 │   ├── tests/
 │   │   ├── unit/

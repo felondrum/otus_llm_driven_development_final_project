@@ -1,1 +1,385 @@
-# Docker Compose для модуля 1
+# ===========================================
+# Docker Compose для модуля 1 - Core Engine
+# ===========================================
+# Использует централизованный .env в корне проекта
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # Инфраструктура
+  # ===========================================
+
+  # Redis - cache for adaptations and Langfuse worker
+  redis:
+    image: redis:7-alpine
+    container_name: chameleon-redis
+    command: --requirepass ${REDIS_PASSWORD:-redis123} --maxmemory-policy noeviction
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+    networks:
+      - chameleon-network
+
+  # Qdrant - vector DB for RAG
+  qdrant:
+    image: qdrant/qdrant:v1.7.0
+    container_name: chameleon-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - chameleon-network
+
+  # Ollama - local LLM models
+  ollama:
+    image: ollama/ollama:latest
+    container_name: chameleon-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - chameleon-network
+
+  # PostgreSQL - database for Langfuse v3
+  postgres:
+    image: postgres:17-alpine
+    container_name: chameleon-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-langfuse}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-langfuse}
+      - POSTGRES_DB=${POSTGRES_DB:-langfuse}
+      - TZ=UTC
+      - PGTZ=UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-langfuse}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - chameleon-network
+
+  # ClickHouse - for Langfuse v3 events and metrics
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: chameleon-clickhouse
+    user: "101:101"
+    environment:
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-clickhouse}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-clickhouse123}
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - chameleon-network
+
+  # MinIO - storage for Langfuse binaries (files, media)
+  minio:
+    image: minio/minio:latest
+    container_name: chameleon-minio
+    command: server --address ":9000" --console-address ":9001" /data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - chameleon-network
+
+  # MinIO Init - create bucket
+  minio-init:
+    image: minio/mc
+    container_name: chameleon-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin123}; do
+        echo 'Waiting for Minio...';
+        sleep 1;
+      done;
+      mc mb local/langfuse || echo 'Bucket already exists';
+      exit 0;
+      "
+    networks:
+      - chameleon-network
+
+  # ===========================================
+  # Langfuse v3 (трейсинг и мониторинг)
+  # ===========================================
+
+  # Langfuse Worker - event processing
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    container_name: chameleon-langfuse-worker
+    ports:
+      - "3030:3030"
+    environment:
+      - NEXTAUTH_URL=http://localhost:3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-langfuse}:${POSTGRES_PASSWORD:-langfuse}@postgres:5432/${POSTGRES_DB:-langfuse}
+      - SALT=${SALT:-strong-salt-value-for-api-key-encryption-12345}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-test1234567890}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - TELEMETRY_ENABLED=false
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=false
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://clickhouse:9000
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-clickhouse}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-clickhouse123}
+      - CLICKHOUSE_CLUSTER_ENABLED=false
+      - LANGFUSE_USE_AZURE_BLOB=false
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=auto
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=media/
+      - LANGFUSE_S3_BATCH_EXPORT_ENABLED=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_AUTH=${REDIS_PASSWORD:-redis123}
+    depends_on:
+      - postgres
+      - minio
+      - redis
+      - clickhouse
+    networks:
+      - chameleon-network
+
+  # Langfuse Web - web interface
+  langfuse-web:
+    image: langfuse/langfuse:3
+    container_name: chameleon-langfuse-server
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXTAUTH_URL=http://localhost:3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-langfuse}:${POSTGRES_PASSWORD:-langfuse}@postgres:5432/${POSTGRES_DB:-langfuse}
+      - SALT=${SALT:-strong-salt-value-for-api-key-encryption-12345}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-test1234567890}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - TELEMETRY_ENABLED=false
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=false
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://clickhouse:9000
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-clickhouse}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-clickhouse123}
+      - CLICKHOUSE_CLUSTER_ENABLED=false
+      - LANGFUSE_USE_AZURE_BLOB=false
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=auto
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=media/
+      - LANGFUSE_S3_BATCH_EXPORT_ENABLED=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_AUTH=${REDIS_PASSWORD:-redis123}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-me}
+    depends_on:
+      - postgres
+      - minio
+      - redis
+      - clickhouse
+      - langfuse-worker
+    networks:
+      - chameleon-network
+
+  # ===========================================
+  # Module 1 - Core Engine
+  # ===========================================
+
+  # LLM Gateway - HTTP service for LLM
+  llm-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - SERVICE=llm_gateway
+    container_name: chameleon-llm-gateway
+    ports:
+      - "8003:8003"
+    environment:
+      - SERVICE=llm_gateway
+      - CONFIG_PATH=/app/config/development.yaml
+      - PORT=8003
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      # OpenTelemetry for Langfuse v3
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://langfuse-worker:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_SERVICE_NAME=llm-gateway
+      - OLLAMA_URL=http://ollama:11434
+      - YA_LLM_KEY=${YA_LLM_KEY}
+      - YA_HOST_KEY=${YA_HOST_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse-web:3000}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+    depends_on:
+      - redis
+      - ollama
+      - langfuse-web
+    networks:
+      - chameleon-network
+
+  # Retriever - gRPC service for RAG
+  retriever:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - SERVICE=retriever
+    container_name: chameleon-retriever
+    ports:
+      - "8002:8002"
+    environment:
+      - SERVICE=retriever
+      - CONFIG_PATH=/app/config/development.yaml
+      - PORT=8002
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - OLLAMA_URL=http://ollama:11434
+      - EMBEDDER_HOST=localhost
+      - EMBEDDER_PORT=8004
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse-web:3000}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      # OpenTelemetry for Langfuse v3
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://langfuse-worker:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_SERVICE_NAME=retriever
+    depends_on:
+      - redis
+      - qdrant
+      - ollama
+      - langfuse-web
+    networks:
+      - chameleon-network
+
+  # Orchestrator - gRPC service for orchestration
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - SERVICE=orchestrator
+    container_name: chameleon-orchestrator
+    ports:
+      - "8001:8001"
+    environment:
+      - SERVICE=orchestrator
+      - CONFIG_PATH=/app/config/development.yaml
+      - PORT=8001
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - RETRIEVER_HOST=retriever
+      - LLM_GATEWAY_HOST=llm-gateway
+      - LLM_GATEWAY_PORT=8003
+      - OLLAMA_URL=http://ollama:11434
+      - YA_LLM_KEY=${YA_LLM_KEY}
+      - YA_HOST_KEY=${YA_HOST_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse-web:3000}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      # OpenTelemetry for Langfuse v3
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://langfuse-worker:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_SERVICE_NAME=orchestrator
+    depends_on:
+      - redis
+      - qdrant
+      - ollama
+      - llm-gateway
+      - retriever
+      - langfuse-web
+    networks:
+      - chameleon-network
+
+# ===========================================
+# Networks
+# ===========================================
+networks:
+  chameleon-network:
+    driver: bridge
+
+# ===========================================
+# Volumes
+# ===========================================
+volumes:
+  redis_data:
+  qdrant_data:
+  ollama_data:
+  postgres_data:
+  clickhouse_data:
+  clickhouse_logs:
+  minio_data:
