@@ -1,0 +1,338 @@
+/* ===========================================
+   Main CSS for Chameleon Chat
+   =========================================== */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  transition: background 0.5s ease;
+  padding: 20px;
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Login Styles */
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+}
+
+.login-container h1 {
+  color: #333;
+  margin-bottom: 10px;
+  font-size: 2.5rem;
+}
+
+.login-container p {
+  color: #666;
+  margin-bottom: 30px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-weight: 600;
+}
+
+.form-group select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  font-size: 1rem;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.form-group select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 14px 40px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  width: 100%;
+  max-width: 400px;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Chat Room Styles */
+.chat-room {
+  display: flex;
+  flex-direction: column;
+  height: 80vh;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.chat-header {
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.chat-header h2 {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+}
+
+.user-info {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin-bottom: 5px;
+}
+
+.connection-status {
+  font-size: 0.85rem;
+}
+
+.connection-status.connected {
+  color: #4ade80;
+}
+
+.connection-status.disconnected {
+  color: #f87171;
+}
+
+.chat-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.user-list {
+  width: 250px;
+  padding: 20px;
+  border-right: 1px solid #eee;
+  overflow-y: auto;
+}
+
+.user-list h3 {
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.user-list ul {
+  list-style: none;
+}
+
+.user-list li {
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-bottom: 5px;
+}
+
+.user-list li:hover {
+  background: #f0f0f0;
+}
+
+.user-list li.selected {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.message-list {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #fafafa;
+}
+
+.message {
+  margin-bottom: 15px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  max-width: 80%;
+}
+
+.message.sent {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  margin-left: auto;
+  text-align: right;
+}
+
+.message.received {
+  background: white;
+  border: 1px solid #ddd;
+  margin-right: auto;
+}
+
+.message-content {
+  word-wrap: break-word;
+}
+
+.message-text {
+  margin-bottom: 5px;
+}
+
+.original-message {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  margin-top: 5px;
+  font-style: italic;
+}
+
+.adapted-message {
+  margin-bottom: 5px;
+}
+
+.style-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  margin-top: 5px;
+}
+
+.style-badge {
+  background: #667eea;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+}
+
+.adapted-badge {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.input-area {
+  padding: 20px;
+  border-top: 1px solid #eee;
+  background: white;
+}
+
+.input-controls {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.input-controls select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+}
+
+.input-controls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.message-form {
+  display: flex;
+  gap: 10px;
+}
+
+.message-form input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.message-form input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.message-form button {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.message-form button:hover {
+  transform: translateY(-2px);
+}
+
+.message-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .chat-container {
+    flex-direction: column;
+  }
+  
+  .user-list {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #eee;
+    max-height: 150px;
+  }
+  
+  .message-list {
+    flex: 1;
+    min-height: 0;
+  }
+  
+  .input-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,1 +1,0 @@
-# StyleSelector компонент

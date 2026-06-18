@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Chameleon Chat",
+    "version": "1.0.0"
+  },
+  "backend": {
+    "port": 8080,
+    "wsPort": 8081,
+    "orchestrator": {
+      "host": "localhost",
+      "port": 8001
+    }
+  },
+  "features": {
+    "randomBackground": true,
+    "showOriginalOnHover": true,
+    "typingIndicators": true
+  }
+}
