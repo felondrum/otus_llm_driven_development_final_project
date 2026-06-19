@@ -6,7 +6,9 @@
 
 **Особенности:**
 - Один контейнер чата (с возможностью масштабирования через Redis Pub/Sub)
-- Выбор тестового пользователя из списка (из Core Engine)
+- Профили пользователей хранятся в SQLite БД
+- Управление профилями через REST API
+- Синхронизация с Core Engine через gRPC
 - Автоматическое случайное изменение фона
 - Минималистичный UI с базовыми функциями
 - Поддержка литературных стилей
@@ -17,6 +19,7 @@
 - **Backend**: Python 3.11 + FastAPI + WebSocket
 - **Frontend**: React 18 + Vite
 - **Коммуникация**: gRPC (с Core Engine), Redis Pub/Sub
+- **База данных**: SQLite для профилей пользователей
 - **Контейнеризация**: Docker + Docker Compose
 
 ## Структура проекта
@@ -33,6 +36,7 @@ module-2-chat-frontend/
 │   │   ├── main.py            # FastAPI server
 │   │   ├── websocket.py       # WebSocket обработчики
 │   │   ├── api.py             # REST endpoints
+│   │   ├── database.py        # SQLite database for profiles
 │   │   ├── config.py          # Конфигурация
 │   │   └── __init__.py
 │   └── frontend/               # React frontend
@@ -109,6 +113,12 @@ docker-compose down
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/users` | GET | Список тестовых пользователей |
+| `/profiles` | GET | Список всех профилей (из БД) |
+| `/profiles/{user_id}` | GET | Получить профиль по ID |
+| `/profiles` | POST | Создать профиль |
+| `/profiles/{user_id}` | PUT | Обновить профиль |
+| `/profiles/{user_id}` | DELETE | Удалить профиль |
+| `/profiles/sync` | POST | Синхронизировать с Core Engine |
 | `/styles` | GET | Список доступных стилей |
 | `/health` | GET | Проверка состояния |
 
@@ -126,7 +136,9 @@ docker-compose down
 
 ## Тестовые пользователи
 
-При запуске загружаются пользователи из Core Engine:
+При первом запуске профили загружаются из Core Engine через gRPC. Если Core Engine недоступен, используются тестовые профили по умолчанию.
+
+Доступные пользователи:
 
 - `alex_i` - Иванов Алексей (engineer, informal)
 - `petr_s` - Смирнов Петр (team_lead, formal)
@@ -137,6 +149,53 @@ docker-compose down
 - `sergey_m` - Михайлов Сергей (intern, informal)
 - `olga_a` - Алексеева Ольга (director, formal)
 
+## Управление профилями
+
+### Через REST API (Module 2)
+
+```bash
+# Список всех профилей
+curl http://localhost:8080/api/v1/profiles
+
+# Создать профиль
+curl -X POST http://localhost:8080/api/v1/profiles \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "new_user", "full_name": "Новый Пользователь", "role": "employee"}'
+
+# Обновить профиль
+curl -X PUT http://localhost:8080/api/v1/profiles/new_user \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "new_user", "full_name": "Обновленный Пользователь", "role": "manager"}'
+
+# Удалить профиль
+curl -X DELETE http://localhost:8080/api/v1/profiles/new_user
+
+# Синхронизировать с Core Engine
+curl -X POST http://localhost:8080/api/v1/profiles/sync
+```
+
+### Через Admin API (Module 3)
+
+```bash
+# Список всех профилей
+curl http://localhost:8100/api/admin/profiles
+
+# Создать профиль
+curl -X POST http://localhost:8100/api/admin/profiles \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "new_user", "full_name": "Новый Пользователь", "role": "employee"}'
+
+# Обновить профиль
+curl -X PUT http://localhost:8100/api/admin/profiles/new_user \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "new_user", "full_name": "Обновленный Пользователь", "role": "manager"}'
+
+# Удалить профиль
+curl -X DELETE http://localhost:8100/api/admin/profiles/new_user
+
+# Синхронизировать все профили
+curl -X POST http://localhost:8100/api/admin/profiles/sync
+```
 ## Доступные стили
 
 - `chekhov` - Антон Чехов (ироничный, меланхоличный)
@@ -161,6 +220,40 @@ cp .env.example .env
 | `ORCHESTRATOR_HOST` | `localhost` | Хост Core Engine |
 | `ORCHESTRATOR_PORT` | `8001` | Порт gRPC Core Engine |
 | `LOG_LEVEL` | `INFO` | Уровень логирования |
+| `CHAT_DB_PATH` | `/app/backend/chat_profiles.db` | Путь к SQLite файлу профилей |
+
+## Архитектура данных
+
+### База данных профилей (SQLite)
+
+Профили пользователей хранятся в локальной SQLite базе данных:
+
+```sql
+CREATE TABLE profiles (
+    user_id TEXT PRIMARY KEY,
+    full_name TEXT NOT NULL,
+    role TEXT,
+    department TEXT,
+    honorific_type TEXT,
+    communication_mode TEXT,
+    known_triggers TEXT,  -- JSON array
+    core_user_id TEXT,    -- Ссылка на Core Engine
+    last_updated TEXT
+)
+```
+
+Синхронизация происходит при старте backend и через API endpoints:
+- `/api/v1/profiles/sync` - синхронизация всех профилей
+- `/api/v1/profiles` (POST) - создание профиля с автоматической синхронизацией
+
+### Связь с Core Engine
+
+Module 2 использует Core Engine для:
+1. **Исходных данных** - загрузка профилей при первом запуске
+2. **Адаптации сообщений** - вызов через gRPC для обработки сообщений
+3. **Синхронизации** - поддержание актуальности профилей
+
+Ключевое поле связи: `core_user_id` = `user_id` из Core Engine
 
 ## Верификация
 
@@ -169,6 +262,9 @@ cp .env.example .env
 ```bash
 # Проверка REST API
 curl http://localhost:8080/api/v1/users
+
+# Проверка профилей
+curl http://localhost:8080/api/v1/profiles
 
 # Проверка состояния
 curl http://localhost:8080/health

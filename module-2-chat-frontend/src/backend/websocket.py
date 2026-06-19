@@ -57,17 +57,21 @@ def get_container_id():
     return os.environ.get("CHAT_INSTANCE", "unknown")
 
 
-# List of test users (loaded from Core Engine)
-TEST_USERS = [
-    {"user_id": "alex_i", "full_name": "Иванов Алексей Петрович", "role": "engineer"},
-    {"user_id": "petr_s", "full_name": "Смирнов Петр Иванович", "role": "team_lead"},
-    {"user_id": "anna_k", "full_name": "Ковалева Анна Сергеевна", "role": "director"},
-    {"user_id": "maria_s", "full_name": "Смирнова Мария Дмитриевна", "role": "hr_manager"},
-    {"user_id": "dmitry_k", "full_name": "Кузнецов Дмитрий Александрович", "role": "senior_engineer"},
-    {"user_id": "elena_v", "full_name": "Воронова Елена Николаевна", "role": "team_lead"},
-    {"user_id": "sergey_m", "full_name": "Михайлов Сергей Олегович", "role": "intern"},
-    {"user_id": "olga_a", "full_name": "Алексеева Ольга Викторовна", "role": "director"},
-]
+# List of test users (loaded from database)
+from database import get_all_profiles, get_test_profiles
+
+try:
+    TEST_USERS = get_all_profiles()
+    if not TEST_USERS:
+        logger.info("No profiles in database, loading test profiles")
+        TEST_USERS = get_test_profiles()
+        # Insert test profiles into database
+        from database import insert_profile
+        for profile in TEST_USERS:
+            insert_profile(profile)
+except Exception as e:
+    logger.warning(f"Failed to load profiles from database: {e}. Using test profiles.")
+    TEST_USERS = get_test_profiles()
 
 
 @dataclass

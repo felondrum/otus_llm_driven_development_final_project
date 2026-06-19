@@ -23,11 +23,14 @@ services:
       - REDIS_PASSWORD=redis123
       - PORT=8080
       - WS_PORT=8080
+      - CHAT_DB_PATH=/app/backend/chat_profiles.db
     volumes:
-      - ./src/backend:/app/backend
-      - ./config:/app/config
+      - chat-db-data:/app/backend/db
     networks:
       - chameleon-network
+
+volumes:
+  chat-db-data:
 
 networks:
   chameleon-network:
