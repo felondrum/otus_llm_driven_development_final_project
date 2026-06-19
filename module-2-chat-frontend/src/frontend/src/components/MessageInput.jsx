@@ -1,1 +1,0 @@
-# MessageInput компонент

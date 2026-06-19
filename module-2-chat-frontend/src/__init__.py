@@ -1,1 +1,1 @@
-# Chat frontend package
+# Module 2 - Chat Frontend

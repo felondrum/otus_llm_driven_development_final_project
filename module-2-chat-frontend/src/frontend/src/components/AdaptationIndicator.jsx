@@ -1,1 +1,0 @@
-# AdaptationIndicator компонент

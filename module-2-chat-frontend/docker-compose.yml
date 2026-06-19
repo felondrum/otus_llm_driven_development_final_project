@@ -1,0 +1,37 @@
+# ===========================================
+# Docker Compose для модуля 2 - Chat Frontend
+# ===========================================
+# Один контейнер чата с Redis Pub/Sub для расширяемости
+
+services:
+  # Первый чат
+  chat-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_WS_PORT=8080
+    container_name: chameleon-chat-1
+    ports:
+      - "8080:8080"  # HTTP and WebSocket
+    environment:
+      - CHAT_INSTANCE=1
+      - ORCHESTRATOR_HOST=host.docker.internal
+      - ORCHESTRATOR_PORT=8001
+      - REDIS_HOST=host.docker.internal
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=redis123
+      - PORT=8080
+      - WS_PORT=8080
+      - CHAT_DB_PATH=/app/backend/chat_profiles.db
+    volumes:
+      - chat-db-data:/app/backend/db
+    networks:
+      - chameleon-network
+
+volumes:
+  chat-db-data:
+
+networks:
+  chameleon-network:
+    driver: bridge

@@ -1,1 +1,1 @@
-# gRPC client package
+# gRPC Client module for Core Engine integration
