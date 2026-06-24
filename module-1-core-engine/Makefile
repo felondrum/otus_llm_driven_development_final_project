@@ -21,8 +21,6 @@ help:
 	@echo ""
 	@echo "Разработка:"
 	@echo "  make lint            - Запустить linting"
-	@echo "  make generate-proto  - Сгенерировать protobuf stubs"
-	@echo "  make fix-stubs       - Исправить импорты в stub файлах"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make run             - Запустить все сервисы через docker-compose"
@@ -63,27 +61,6 @@ e2e-setup:
 lint:
 	poetry run ruff check src/
 	poetry run black --check src/
-
-generate-proto:
-	bash scripts/generate_proto.sh
-
-fix-stubs:
-	bash scripts/fix_stub_imports.sh
-
-run:
-	docker-compose -f docker-compose.module.yml up -d
-
-run-orchestrator:
-	docker-compose -f docker-compose.module.yml up orchestrator
-
-run-retriever:
-	docker-compose -f docker-compose.module.yml up retriever
-
-run-llm-gateway:
-	docker-compose -f docker-compose.module.yml up llm-gateway
-
-stop:
-	docker-compose -f docker-compose.module.yml down
 
 clean:
 	rm -rf __pycache__ .pytest_cache htmlcov .coverage
