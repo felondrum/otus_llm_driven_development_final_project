@@ -109,11 +109,13 @@ docker-compose logs -f orchestrator
 | Сервис | URL | Порт | Описание |
 |--------|-----|------|----------|
 | Langfuse UI | http://localhost:3000 | 3000 | Веб-интерфейс трейсинга |
-| Orchestrator | localhost:8001 | 8001 | gRPC оркестратор |
-| Retriever | localhost:8002 | 8002 | gRPC RAG поиск |
+| Orchestrator | localhost:8001 | 8001 | HTTP оркестратор |
+| Retriever | localhost:8002 | 8002 | HTTP RAG поиск |
 | LLM Gateway | localhost:8003 | 8003 | HTTP LLM прокси |
 | ClickHouse | http://localhost:8123 | 8123 | База метрик |
 | MinIO Console | http://localhost:9001 | 9001 | Хранилище файлов |
+| Admin API | http://localhost:8100 | 8100 | Admin REST API |
+| Admin UI | http://localhost:5174 | 5174 | Admin React UI |
 
 ### Остановка и очистка
 
@@ -201,7 +203,7 @@ flowchart LR
 | **Синхронный + асинхронный потоки** | Адаптация не должна ждать аналитики |
 | **Qdrant для всех RAG данных** | Унификация векторного хранилища, поддержка гибридного поиска |
 | **Redis для кэша и очереди** | Один компонент на две задачи, малый overhead |
-| **gRPC между сервисами** | В 10x быстрее REST, поддержка стримов для будущих voice-фич |
+| **HTTP между сервисами** | Упрощенная отладка, поддержка всех сервисов |
 | **Docker Compose для прототипа** | Быстрый старт, повторяемость окружения |
 
 ---
@@ -290,7 +292,8 @@ flowchart TB
 | **LLM Gateway** | Python/FastAPI | 8003 | 2 | HTTP |
 | **Black Box** | Python | 8004 (internal) | 1 | gRPC |
 | **Dashboard** | FastAPI + Plotly | 8200 | 1 | HTTP |
-| **Admin UI** | React | 8100 | 1 | HTTP |
+| **Admin API** | FastAPI | 8100 | 1 | HTTP |
+| **Admin UI** | React | 5174 | 1 | HTTP |
 | **Data Loader** | Python CLI | - | - | CLI |
 | **Qdrant** | v1.7.0 | 6333, 6334 | 1 | HTTP/gRPC |
 | **Redis** | 7-alpine | 6379 | 1 | RESP |

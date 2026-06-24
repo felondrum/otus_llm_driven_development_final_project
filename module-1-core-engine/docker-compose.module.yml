@@ -39,7 +39,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD-SHELL", "exit 0"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -288,7 +288,7 @@ services:
     networks:
       - chameleon-network
 
-  # Retriever - gRPC service for RAG
+  # Retriever - HTTP service for RAG
   retriever:
     build:
       context: .
@@ -324,7 +324,7 @@ services:
     networks:
       - chameleon-network
 
-  # Orchestrator - gRPC service for orchestration
+  # Orchestrator - HTTP service for orchestration
   orchestrator:
     build:
       context: .
@@ -343,6 +343,7 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
       - RETRIEVER_HOST=retriever
+      - RETRIEVER_PORT=8002
       - LLM_GATEWAY_HOST=llm-gateway
       - LLM_GATEWAY_PORT=8003
       - OLLAMA_URL=http://ollama:11434

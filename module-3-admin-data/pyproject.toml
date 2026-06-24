@@ -1,1 +1,29 @@
-# Python + FastAPI
+[tool.poetry]
+name = "chameleon-admin-api"
+version = "1.0.0"
+description = "Admin API for managing profiles, styles, rules, and documents"
+authors = ["Chameleon Team"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+httpx = "^0.26.0"
+pydantic = "^2.5.3"
+pydantic-settings = "^2.1.0"
+python-dotenv = "^1.0.0"
+python-multipart = "^0.0.19"
+asyncpg = "^0.29.0"
+qdrant-client = "^1.7.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.4"
+pytest-asyncio = "^0.23.4"
+black = "^24.1.1"
+flake8 = "^7.0.0"
+mypy = "^1.8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

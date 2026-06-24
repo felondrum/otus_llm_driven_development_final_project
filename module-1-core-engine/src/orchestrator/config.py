@@ -34,6 +34,7 @@ class Config:
                 "redis": {"host": "localhost", "port": 6379},
                 "qdrant": {"host": "localhost", "port": 6333},
                 "ollama": {"host": "localhost", "port": 11434},
+                "llm_gateway": {"host": "llm-gateway", "port": 8003},
                 "langfuse": {"host": "http://localhost:5000", "enabled": False},
             },
             "logging": {"level": "DEBUG"},
@@ -118,6 +119,16 @@ class Config:
     def langfuse_enabled(self) -> bool:
         """Get Langfuse enabled flag."""
         return self.get("services.langfuse.enabled", False)
+
+    @property
+    def llm_gateway_host(self) -> str:
+        """Get LLM Gateway host."""
+        return os.getenv("LLM_GATEWAY_HOST", self.get("services.llm_gateway.host", "llm-gateway"))
+
+    @property
+    def llm_gateway_port(self) -> int:
+        """Get LLM Gateway port."""
+        return int(os.getenv("LLM_GATEWAY_PORT", self.get("services.llm_gateway.port", 8003)))
 
     @property
     def log_level(self) -> str:
