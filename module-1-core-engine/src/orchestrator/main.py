@@ -27,9 +27,10 @@ from common.langfuse_integration import (
     init_langfuse_from_config,
     log_generation,
 )
-from common.schemas import MessageRequest, MessageResponse, AdaptationMetadata
+from common.schemas import MessageRequest, MessageResponse, AdaptationMetadata, ClassificationResult
 
 from .cache_manager import get_cache_manager
+from .classifier import get_classifier
 from .context_assembler import get_context_assembler
 from .config import get_config, Config
 
@@ -74,6 +75,7 @@ class HealthResponse(BaseModel):
 _config: Optional[Config] = None
 _cache_manager = None
 _context_assembler = None
+_classifier = None
 _http_client = None
 _retriever_url: str = None
 _llm_gateway_url: str = None
@@ -103,6 +105,14 @@ def get_cache_manager_instance():
             password=redis_password,
         )
     return _cache_manager
+
+
+def get_classifier_instance():
+    """Get classifier instance."""
+    global _classifier
+    if _classifier is None:
+        _classifier = get_classifier()
+    return _classifier
 
 
 def get_context_assembler_instance():
@@ -242,6 +252,23 @@ async def process_message(request: ProcessMessageRequest):
         log_error("Invalid message input", error=error)
         raise HTTPException(status_code=400, detail=error)
 
+    # Classify message (before cache check)
+    classification_result: Optional[ClassificationResult] = None
+    try:
+        classifier = get_classifier_instance()
+        classification_result = await classifier.classify_message(request.text)
+        log_info("Message classified", category=classification_result.category if classification_result else "none")
+    except Exception as e:
+        log_error("Failed to classify message", error=str(e))
+        # Fallback to unknown classification
+        import time
+        classification_result = ClassificationResult(
+            category="неизвестно",
+            category_code="unknown",
+            confidence=0.5,
+            processed_at=int(time.time() * 1000)
+        )
+
     # Use context manager to ensure trace is properly ended
     with log_generation(
         name=f"orchestrator-process-{message_id}",
@@ -324,15 +351,22 @@ async def process_message(request: ProcessMessageRequest):
         try:
             retriever_url = get_retriever_url()
             http_client = get_http_client()
-            response = await http_client.get(
-                f"{retriever_url}/api/v1/rules?sender_role=user&recipient_role={profile.get('role', '') if profile else ''}&text={request.text}&limit=5",
-                timeout=5.0,
-            )
+            # Получаем роль получателя
+            recipient_role = profile.get('role', '') if profile else ''
+            log_info("Fetching rules", recipient_role=recipient_role)
+            # Формируем запрос без text параметра (не используется в Retriever)
+            rules_url = f"{retriever_url}/api/v1/rules?sender_role=user&recipient_role={recipient_role}&limit=5"
+            response = await http_client.get(rules_url, timeout=5.0)
             if response.status_code == 200:
                 rules = response.json().get("rules", [])
                 track_cache_ttl_hit(cache_type="rules")
+                log_info("Rules retrieved", count=len(rules), recipient_role=recipient_role)
+            else:
+                log_error("Failed to get rules via HTTP", status=response.status_code)
+                track_cache_ttl_miss(cache_type="rules")
         except httpx.RequestError as e:
             log_error("Failed to get rules via HTTP", error=str(e))
+            track_cache_ttl_miss(cache_type="rules")
 
         # Fetch style examples via HTTP
         styles = []
@@ -353,16 +387,31 @@ async def process_message(request: ProcessMessageRequest):
         # Fetch culture chunks via HTTP
         culture_chunks = []
         try:
+            # Формируем семантический запрос с учетом стиля и роли
+            culture_query_parts = []
+            if request.style_name:
+                culture_query_parts.append(f"стиль {request.style_name}")
+            if profile:
+                if profile.get('role'):
+                    culture_query_parts.append(f"роль {profile.get('role')}")
+                if profile.get('department'):
+                    culture_query_parts.append(f"отдел {profile.get('department')}")
+            # Add classification category to query if available
+            if classification_result and classification_result.category != "неизвестно":
+                culture_query_parts.append(classification_result.category)
+            culture_query = " ".join(culture_query_parts) if culture_query_parts else request.text
+            
             retriever_url = get_retriever_url()
             http_client = get_http_client()
-            culture_query = f"style:{request.style_name} role:{profile.get('role', '') if profile else ''} department:{profile.get('department', '') if profile else ''}"
+            # Pass classification category to retriever
+            category_param = classification_result.category if classification_result and classification_result.category != "неизвестно" else ""
             response = await http_client.get(
-                f"{retriever_url}/api/v1/culture/search?query={culture_query}&limit=3",
+                f"{retriever_url}/api/v1/culture/search?query={culture_query}&limit=3&category={category_param}",
                 timeout=5.0,
             )
             if response.status_code == 200:
                 culture_chunks = response.json().get("chunks", [])
-                log_info("Culture chunks retrieved via HTTP", count=len(culture_chunks))
+                log_info("Culture chunks retrieved via HTTP", count=len(culture_chunks), category=category_param)
         except httpx.RequestError as e:
             log_error("Failed to get culture chunks via HTTP", error=str(e))
 
@@ -375,6 +424,7 @@ async def process_message(request: ProcessMessageRequest):
             styles=styles,
             style_name=request.style_name,
             culture_chunks=culture_chunks,
+            classification_result=classification_result,
         )
 
         # Call LLM Gateway via HTTP

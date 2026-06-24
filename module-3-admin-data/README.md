@@ -1,8 +1,82 @@
 # Module 3: Admin & Data Management
 
+## Бизнес-смысл
+
 Админ-интерфейс для управления данными системы Chameleon Chat.
 
-## Структура
+### Функциональность
+
+- **Профили (profiles)** - CRUD операции для модификации сообщений (Module 3 → Core Engine)
+- **Профили чата (chat_profiles)** - CRUD операции для использования в чате (Module 2 ↔ Module 3)
+- **Правила** - Управление корпоративными правилами
+- **Стили** - Управление литературными стилями
+- **Документы** - Загрузка и управление документами в RAG
+- **Система** - Статус сервисов и управление кэшем
+
+### Admin UI (React)
+
+- Дашборд с метриками
+- Таблицы с сортировкой и пагинацией
+- Формы для создания/редактирования данных
+- Загрузка файлов через HTML form
+
+> 💡 **Примечание:** Для корректной работы модуль 3 должен быть запущен в той же Docker сети (chameleon-network), что и модули 1 и 2.
+
+---
+
+## Технологии
+
+- **Backend**: Python 3.11 + FastAPI
+- **Frontend**: React 18 + Vite
+- **База данных**: PostgreSQL для профилей
+- **Контейнеризация**: Docker + Docker Compose
+
+---
+
+## Архитектура
+
+### Компоненты
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Admin Data (Module 3)                            │
+│  ┌─────────────────┐  ┌─────────────────┐                         │
+│  │ Admin API       │  │ Admin UI        │                         │
+│  │ (FastAPI)       │  │ (React + Vite)  │                         │
+│  │ - CRUD profiles │  │ - Dashboard     │                         │
+│  │ - CRUD rules    │  │ - Tables        │                         │
+│  │ - CRUD styles   │  │ - Forms         │                         │
+│  │ - CRUD docs     │  │ - Upload        │                         │
+│  └─────────────────┘  └─────────────────┘                         │
+│  ┌─────────────────┐                                              │
+│  │ PostgreSQL      │                                              │
+│  │ (профили чата)  │                                              │
+│  └─────────────────┘                                              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Поток обработки
+
+```
+Admin → Admin UI → Admin API → PostgreSQL
+                          ↓
+                     Core Engine
+                          ↓
+                    Profile Sync
+```
+
+---
+
+## Документация
+
+| Тип документации | Файл | Описание |
+|------------------|------|----------|
+| **Deployment** | [deployment.md](deployment.md) | Инструкции по развертыванию |
+| **Testing** | [testing.md](testing.md) | Руководство по тестированию |
+
+---
+
+## Структура проекта
 
 ```
 module-3-admin-data/
@@ -45,108 +119,7 @@ module-3-admin-data/
 └── README.md
 ```
 
-## Функциональность
-
-### Admin API (FastAPI)
-
-- **Профили (profiles)** - CRUD операции для модификации сообщений (Module 3 → Core Engine)
-- **Профили чата (chat_profiles)** - CRUD операции для использования в чате (Module 2 ↔ Module 3)
-- **Правила** - Управление корпоративными правилами
-- **Стили** - Управление литературными стилями
-- **Документы** - Загрузка и управление документами в RAG
-- **Система** - Статус сервисов и управление кэшем
-
-### Admin UI (React)
-
-- Дашборд с метриками
-- Таблицы с сортировкой и пагинацией
-- Формы для создания/редактирования данных
-- Загрузка файлов через HTML form
-
-## Установка и запуск
-
-### Локальный запуск
-
-```bash
-cd module-3-admin-data
-
-# Установка зависимостей
-poetry install
-
-# Запуск API
-poetry run python -m admin_api.main
-
-# Запуск UI (в другом терминале)
-cd src/frontend_admin
-npm install
-npm run dev
-```
-
-### Docker
-
-```bash
-cd module-3-admin-data
-
-# Собрать и запустить
-docker-compose -f docker-compose.module.yml up -d
-
-# Посмотреть логи
-docker-compose -f docker-compose.module.yml logs -f
-
-# Остановить
-docker-compose -f docker-compose.module.yml down
-```
-
-## Интеграция с Module 2
-
-Module 3 предоставляет API для получения профилей чата:
-
-**Endpoint:** `GET /api/v1/admin/chat_profiles`
-
-**Module 2 подключается как:**
-- Хост: `host.docker.internal`
-- Порт: `8200`
-
-**Module 3 переменные окружения в docker-compose.yml:**
-
-```yaml
-- DATABASE_URL=postgresql://chameleon:chameleon123@host.docker.internal:5433/chameleon_admin
-```
-
-## Тесты
-
-### Интеграционные тесты с PostgreSQL
-
-```bash
-cd module-3-admin-data
-
-# Запустить PostgreSQL через Docker Compose
-docker-compose -f docker-compose.module.yml up -d postgres
-
-# Подождать 10-15 секунд пока БД запустится
-sleep 15
-
-# Установить зависимости
-poetry install
-
-# Запустить тесты
-poetry run pytest tests/integration/ -v
-
-# Или использовать скрипт
-./scripts/test.sh
-
-# Остановить PostgreSQL
-docker-compose -f docker-compose.module.yml down
-```
-
-### Покрытие тестами
-
-- ✅ Profiles CRUD (create, read, update, delete)
-- ✅ Rules CRUD (create, read, update, delete)
-- ✅ Styles CRUD (create, read, update, delete)
-- ✅ Documents CRUD (create, read, delete)
-- ✅ Database pool management
-- ✅ Sync functions (mocked)
+---
 
 ## API Endpoints
 
@@ -178,35 +151,47 @@ docker-compose -f docker-compose.module.yml down
 | `/api/v1/admin/system/cache/clear` | POST | Очистка кэша |
 | `/api/v1/admin/system/rules/reload` | POST | Перезагрузка правил |
 
-### Связь между профилями
-
-- **profiles** - профили для модификации сообщений (Module 3 → Core Engine)
-- **chat_profiles** - профили для использования в чате (Module 2 ↔ Module 3)
-
-Оба типа профилей связаны по `user_id`. Модуль 3 может синхронизировать `chat_profiles` в Core Engine через `/api/v1/chat/profiles` endpoint.
+---
 
 ## Конфигурация
 
 - **API Port**: 8100
 - **Frontend Port**: 5174
-- **Core Engine gRPC**: localhost:8001
+- **Core Engine HTTP**: localhost:8001
 - **Qdrant**: localhost:6333
 - **Chat Frontend**: localhost:8080
 
-## Дополнительные возможности
+---
 
-- Импорт профилей из CSV/JSON
-- Батч-обработка документов
-- Генерация тестовых данных
-- Валидация данных перед сохранением
+## Быстрый старт
 
-## Переменные окружения
+```bash
+cd module-3-admin-data
 
-| Переменная | Описание | Значение по умолчанию |
-|------------|----------|----------------------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://chameleon:chameleon123@localhost:5433/chameleon_admin` |
-| `CORE_ENGINE_HTTP_HOST` | Core Engine host | `localhost` |
-| `CORE_ENGINE_HTTP_PORT` | Core Engine HTTP port | `8001` |
-| `RETRIEVER_HTTP_HOST` | Retriever host | `localhost` |
-| `RETRIEVER_HTTP_PORT` | Retriever HTTP port | `8002` |
-| `ADMIN_PORT` | Admin API port | `8100` |
+# Собрать и запустить
+docker-compose -f docker-compose.module.yml up -d
+
+# Посмотреть логи
+docker-compose -f docker-compose.module.yml logs -f
+
+# Остановить
+docker-compose -f docker-compose.module.yml down
+```
+
+---
+
+## Интеграция с Module 2
+
+Module 3 предоставляет API для получения профилей чата:
+
+**Endpoint:** `GET /api/v1/admin/chat_profiles`
+
+**Module 2 подключается как:**
+- Хост: `host.docker.internal`
+- Порт: `8200`
+
+**Module 3 переменные окружения в docker-compose.yml:**
+
+```yaml
+- DATABASE_URL=postgresql://chameleon:chameleon123@host.docker.internal:5433/chameleon_admin
+```

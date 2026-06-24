@@ -81,28 +81,29 @@ async def wait_for_services():
         else:
             pytest.fail("LLM Gateway failed to start")
     
-    # Wait for Orchestrator gRPC
-    import grpc
-    channel = grpc.insecure_channel("localhost:8001")
-    for _ in range(30):
-        try:
-            grpc.channel_ready_future(channel).result(timeout=1)
-            break
-        except Exception:
-            await asyncio.sleep(1)
-    else:
-        pytest.fail("Orchestrator gRPC failed to start")
+    # Wait for Orchestrator HTTP
+    async with httpx.AsyncClient() as client:
+        for _ in range(30):
+            try:
+                response = await client.get("http://localhost:8001/health")
+                if response.status_code == 200:
+                    break
+            except Exception:
+                await asyncio.sleep(1)
+        else:
+            pytest.fail("Orchestrator HTTP failed to start")
     
-    # Wait for Retriever gRPC
-    channel = grpc.insecure_channel("localhost:8002")
-    for _ in range(30):
-        try:
-            grpc.channel_ready_future(channel).result(timeout=1)
-            break
-        except Exception:
-            await asyncio.sleep(1)
-    else:
-        pytest.fail("Retriever gRPC failed to start")
+    # Wait for Retriever HTTP
+    async with httpx.AsyncClient() as client:
+        for _ in range(30):
+            try:
+                response = await client.get("http://localhost:8002/health")
+                if response.status_code == 200:
+                    break
+            except Exception:
+                await asyncio.sleep(1)
+        else:
+            pytest.fail("Retriever HTTP failed to start")
     
     # Give services time to fully initialize
     await asyncio.sleep(2)

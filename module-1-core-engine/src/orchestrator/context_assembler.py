@@ -1,7 +1,7 @@
 # Сборщик контекста - сборка промпта для LLM
 
 from typing import Dict, Any, List, Optional
-from common.schemas import UserProfile, CorporateRule, ArtisticStyle
+from common.schemas import UserProfile, CorporateRule, ArtisticStyle, ClassificationResult
 
 
 class ContextAssembler:
@@ -42,7 +42,8 @@ class ContextAssembler:
         rules: List[CorporateRule] = None,
         styles: List[ArtisticStyle] = None,
         style_name: Optional[str] = None,
-        culture_chunks: List[Dict[str, Any]] = None,  # Новый параметр
+        culture_chunks: List[Dict[str, Any]] = None,
+        classification_result: Optional[ClassificationResult] = None,
     ) -> str:
         """
         Assembles context for LLM.
@@ -54,6 +55,7 @@ class ContextAssembler:
             styles: Artistic styles examples (optional)
             style_name: Selected style name (optional)
             culture_chunks: Corporate culture chunks for RAG (optional)
+            classification_result: Message classification result (optional)
 
         Returns:
             Formatted prompt for LLM
@@ -68,6 +70,14 @@ class ContextAssembler:
         prompt_parts.append("## Исходное сообщение:")
         prompt_parts.append(original_text)
         prompt_parts.append("")
+
+        # Message classification (new)
+        if classification_result:
+            prompt_parts.append("## Классификация сообщения:")
+            prompt_parts.append(f"Категория: {classification_result.category}")
+            prompt_parts.append("")
+            prompt_parts.append("ВАЖНО: Учти классификацию сообщения при адаптации.")
+            prompt_parts.append("")
 
         # Recipient profile
         if profile:
@@ -100,6 +110,7 @@ class ContextAssembler:
 
         # Corporate rules
         if rules:
+            prompt_parts.append("")
             prompt_parts.append("## Корпоративные правила коммуникации:")
             for i, rule in enumerate(rules, 1):
                 # Handle both dict and Pydantic model (and protobuf)
@@ -132,27 +143,22 @@ class ContextAssembler:
                         prompt_parts.append(
                             f"   Пример: '{rule.example_original}' → '{rule.example_adapted}'"
                         )
+                # Add instruction for rule application
+                prompt_parts.append(f"   ВАЖНО: Применяйте это правило при адаптации сообщения.")
             prompt_parts.append("")
 
         # Corporate culture (RAG)
         if culture_chunks:
-            prompt_parts.append("## Корпоративная культура (рекомендации):")
+            prompt_parts.append("")
+            prompt_parts.append("## Корпоративная культура:")
             for i, chunk in enumerate(culture_chunks, 1):
                 # Extract section title if available
                 section_title = chunk.get('section_title', 'Раздел')
                 text = chunk.get('text', '')
-                # Truncate if too long
-                if len(text) > 300:
-                    text = text[:300] + '...'
+                # Increased limit to 500 chars for better context
+                if len(text) > 500:
+                    text = text[:500] + '...'
                 prompt_parts.append(f"{i}. [{section_title}] {text}")
-            prompt_parts.append("")
-
-        # Artistic styles
-        if styles:
-            prompt_parts.append("## Примеры стиля:")
-            for style in styles[:3]:  # Show up to 3 examples
-                prompt_parts.append(f"- {style.style_name} ({style.author})")
-                prompt_parts.append(f'  Пример: "{style.sample_text[:150]}..."')
             prompt_parts.append("")
 
         # Selected style
@@ -160,31 +166,79 @@ class ContextAssembler:
             prompt_parts.append(f"## Требуемый стиль: {style_name}")
             prompt_parts.append("")
 
+        # Artistic styles (with style instructions)
+        if styles:
+            prompt_parts.append("")
+            prompt_parts.append("## Примеры применения стиля:")
+            
+            # Add system instruction for style (only if style_name is specified)
+            if style_name:
+                prompt_parts.append(f"**Инструкция:** Применяйте стиль '{style_name}' при адаптации сообщения.")
+                prompt_parts.append("Используйте характерные для этого стиля:")
+                prompt_parts.append("- Лексику и терминологию")
+                prompt_parts.append("- Ритм и интонацию предложений")
+                prompt_parts.append("- Эмоциональную окраску")
+                prompt_parts.append("- Общую манеру выражения мыслей")
+                prompt_parts.append("")
+            
+            for i, style in enumerate(styles[:3], 1):
+                # Handle both PostgreSQL and Qdrant style formats
+                style_name_local = None
+                author = ""
+                sample_text = ""
+                emotion_tags = []
+                
+                if hasattr(style, 'style_name'):
+                    # Qdrant format
+                    style_name_local = style.style_name or style.name or ""
+                    author = style.author or ""
+                    sample_text = style.sample_text or ""
+                    if hasattr(style, 'emotion_tags'):
+                        emotion_tags = style.emotion_tags or []
+                else:
+                    # PostgreSQL format (dict)
+                    style_name_local = style.get("name") or style.get("style_name") or ""
+                    author = style.get("author", "")
+                    sample_text = style.get("sample_text", "")
+                    emotion_tags = style.get("emotion_tags", []) or []
+                    
+                    # Try to extract from examples if not directly available
+                    examples = style.get("examples", [])
+                    if examples and isinstance(examples, list) and len(examples) > 0:
+                        first_example = examples[0]
+                        if isinstance(first_example, dict):
+                            sample_text = first_example.get("output", "") or sample_text
+                            note = first_example.get("note", "")
+                            if note and "Author:" in note:
+                                author = note.replace("Author:", "").strip()
+                    
+                    # Extract emotion_tags from tone
+                    tone = style.get("tone", "")
+                    if tone and isinstance(tone, str):
+                        emotion_tags = [t.strip() for t in tone.split(",") if t.strip()]
+                
+                # Show more context from sample (300 chars instead of 150)
+                sample = sample_text[:300] if len(sample_text) > 300 else sample_text
+                
+                prompt_parts.append(f"{i}. {style_name_local} — {author}")
+                prompt_parts.append(f"   Пример: {sample}")
+                
+                # Add emotion tags if available
+                if emotion_tags:
+                    prompt_parts.append(f"   Эмоции: {', '.join(emotion_tags)}")
+            prompt_parts.append("")
+
         # Detailed instructions
+        prompt_parts.append("")
         prompt_parts.append("## Инструкции:")
+        prompt_parts.append("1. Примените системный стиль (если указан) — используйте характерную лексику и интонацию")
+        prompt_parts.append("2. Учтите профиль получателя (роль, отдел, стиль общения)")
+        prompt_parts.append("3. Примените корпоративные правила коммуникации (если указаны)")
+        prompt_parts.append("4. Следуйте примерам стиля для выбора тона и формулировок")
+        prompt_parts.append("5. Учтите корпоративную культуру (ценности, принципы)")
+        prompt_parts.append("6. Сохраните исходный смысл и ключевую информацию")
         prompt_parts.append(
-            "1. Перепишите исходное сообщение с учетом профиля получателя и требований стиля"
-        )
-        prompt_parts.append(
-            "2. Примените корпоративные правила для адаптации тона и формулировок"
-        )
-        prompt_parts.append(
-            "3. Учтите корпоративную культуру при выборе тона, стиля и формулировок"
-        )
-        prompt_parts.append("4. Сохраните исходный смысл и ключевую информацию")
-        prompt_parts.append("5. Следуйте примерам стиля для выбора тона и лексики")
-
-        # Add specific culture instructions if chunks are available
-        if culture_chunks:
-            prompt_parts.append(
-                "6. Используйте корпоративную культуру (ценности, принципы) для формирования тона"
-            )
-            prompt_parts.append(
-                "7. Применяйте принципы открытости, уважения и командной работы"
-            )
-
-        prompt_parts.append(
-            "8. Выведите ТОЛЬКО переписанное сообщение, без объяснений или дополнительного текста"
+            "7. Выведите ТОЛЬКО переписанное сообщение, без объяснений или дополнительного текста"
         )
         prompt_parts.append("")
 

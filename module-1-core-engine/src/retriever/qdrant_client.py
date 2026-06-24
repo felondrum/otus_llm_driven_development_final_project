@@ -103,11 +103,21 @@ class QdrantClientWrapper:
             
             filter = None
             if filter_category:
+                # Support both 'category' field and 'tags' array
+                # Use 'should' to match either category field or tags array
                 filter = Filter(
                     must=[
-                        FieldCondition(
-                            key="section_title",
-                            match=MatchValue(value=filter_category)
+                        Filter(
+                            should=[
+                                FieldCondition(
+                                    key="category",
+                                    match=MatchValue(value=filter_category)
+                                ),
+                                FieldCondition(
+                                    key="tags",
+                                    match=MatchValue(value=filter_category)
+                                )
+                            ]
                         )
                     ]
                 )
@@ -119,7 +129,19 @@ class QdrantClientWrapper:
                 limit=limit,
             )
 
-            return [hit.payload for hit in search_result]
+            # Map the result to include section_title, text, and section_level
+            result_chunks = []
+            for hit in search_result:
+                payload = hit.payload
+                chunk = {
+                    "text": payload.get("text", ""),
+                    "section_title": payload.get("section_title", payload.get("category", "Раздел")),
+                    "section_level": payload.get("section_level", 2),
+                    "chunk_index": payload.get("chunk_index", 0),
+                    "source": payload.get("source", ""),
+                }
+                result_chunks.append(chunk)
+            return result_chunks
         except Exception as e:
             logger.error(f"Failed to get culture chunks: {e}")
             return []
@@ -195,9 +217,19 @@ class QdrantClientWrapper:
         return profile
 
     async def get_rules(
-        self, sender_role: str, recipient_role: str, limit: int = 5
+        self, sender_role: str, recipient_role: str, limit: int = 5, category: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get corporate rules by roles."""
+        """Get corporate rules by roles and category.
+
+        Args:
+            sender_role: Role of the sender
+            recipient_role: Role of the recipient
+            limit: Maximum number of results
+            category: Optional rule category filter (e.g., 'address', 'tone', 'criticism')
+
+        Returns:
+            List of matching corporate rules
+        """
         try:
             # Generate embedding for query
             ollama_host = os.getenv("OLLAMA_HOST", "ollama")
@@ -210,14 +242,17 @@ class QdrantClientWrapper:
                 logger.warning("Failed to generate embedding for rules query")
                 return []
 
-            filter = Filter(
-                must=[FieldCondition(key="category", match=MatchValue(value="address"))]
-            )
+            # Build filter with category if specified
+            query_filter = None
+            if category:
+                query_filter = Filter(
+                    must=[FieldCondition(key="category", match=MatchValue(value=category))]
+                )
 
             search_result = self.client.search(
                 collection_name="corporate_rules",
                 query_vector=query_vector,
-                query_filter=filter,
+                query_filter=query_filter,
                 limit=limit,
             )
 
@@ -234,26 +269,91 @@ class QdrantClientWrapper:
     def get_style_examples(
         self, style_name: str, sample_count: int = 3
     ) -> List[Dict[str, Any]]:
-        """Get random style examples."""
+        """Get random style examples.
+        
+        Args:
+            style_name: Style identifier - can be style_id (UUID), style_id (like 'chekov'), or name (like 'чеховский')
+            sample_count: Number of examples to return
+            
+        Returns:
+            List of style examples in ArtisticStyle format
+        """
         try:
-            # Use search with filter to get random samples
             from qdrant_client.models import Filter, FieldCondition, MatchValue
-
+            
+            # Try to match by style_id (for latin names like 'chekov') or name (for Cyrillic like 'чеховский')
             filter = Filter(
-                must=[
-                    FieldCondition(key="style_name", match=MatchValue(value=style_name))
+                should=[
+                    # Try to match style_id first (UUID format)
+                    Filter(
+                        must=[
+                            FieldCondition(
+                                key="style_id", 
+                                match=MatchValue(value=style_name)
+                            )
+                        ]
+                    ),
+                    # Then try name field (for Cyrillic names like 'чеховский')
+                    Filter(
+                        must=[
+                            FieldCondition(
+                                key="name", 
+                                match=MatchValue(value=style_name)
+                            )
+                        ]
+                    )
                 ]
             )
 
-            result = self.client.search(
+            # Search with filter (dummy vector for filter-only search)
+            search_result = self.client.search(
                 collection_name="artistic_styles",
-                query_vector=[0.0] * 768,  # Dummy vector for filter-only search
-                filter=filter,
+                query_vector=[0.0] * 768,  # Dummy vector
+                query_filter=filter,
                 limit=sample_count,
             )
 
-            if result and len(result) > 0:
-                return [p.payload for p in result]
+            if search_result and len(search_result) > 0:
+                # Transform Qdrant format to ArtisticStyle format for context_assembler
+                examples = []
+                for hit in search_result:
+                    payload = hit.payload
+                    
+                    # Extract name (could be in 'name' or 'style_name')
+                    name = payload.get("name") or payload.get("style_name", "")
+                    
+                    # Extract tone and convert to emotion_tags
+                    tone = payload.get("tone", "")
+                    emotion_tags = []
+                    if tone and isinstance(tone, str):
+                        emotion_tags = [t.strip() for t in tone.split(",") if t.strip()]
+                    elif isinstance(tone, list):
+                        emotion_tags = tone
+                    
+                    # Extract author from examples if available
+                    author = ""
+                    examples_list = payload.get("examples", [])
+                    if examples_list and isinstance(examples_list, list) and len(examples_list) > 0:
+                        first_example = examples_list[0]
+                        if isinstance(first_example, dict):
+                            note = first_example.get("note", "")
+                            if note and "Author:" in note:
+                                author = note.replace("Author:", "").strip()
+                    
+                    # Extract sample_text from examples if available
+                    sample_text = ""
+                    if examples_list and isinstance(examples_list, list) and len(examples_list) > 0:
+                        first_example = examples_list[0]
+                        if isinstance(first_example, dict):
+                            sample_text = first_example.get("output", "") or first_example.get("output", "")
+                    
+                    examples.append({
+                        "style_name": name,
+                        "author": author,
+                        "sample_text": sample_text,
+                        "emotion_tags": emotion_tags,
+                    })
+                return examples
             return []
         except Exception as e:
             logger.error(f"Failed to get style examples: {e}")

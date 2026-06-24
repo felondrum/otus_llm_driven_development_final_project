@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS rules (
     priority INTEGER DEFAULT 0,
     condition TEXT,
     action TEXT,
+    example_original TEXT,
+    example_adapted TEXT,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

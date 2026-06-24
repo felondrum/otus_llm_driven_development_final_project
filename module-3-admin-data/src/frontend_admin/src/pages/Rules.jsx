@@ -213,6 +213,26 @@ const Rules = () => {
                 />
               </div>
               <div className="form-group">
+                <label htmlFor="example_original">Пример грубости *</label>
+                <textarea
+                  id="example_original"
+                  value={formData.example_original || ''}
+                  onChange={(e) => setFormData({ ...formData, example_original: e.target.value })}
+                  placeholder="Грубая формулировка, которая должна быть адаптирована"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="example_adapted">Пример адаптации *</label>
+                <textarea
+                  id="example_adapted"
+                  value={formData.example_adapted || ''}
+                  onChange={(e) => setFormData({ ...formData, example_adapted: e.target.value })}
+                  placeholder="Вежливая адаптированная формулировка"
+                  required
+                />
+              </div>
+              <div className="form-group">
                 <label>
                   <input
                     type="checkbox"

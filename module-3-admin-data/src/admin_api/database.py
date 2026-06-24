@@ -157,10 +157,11 @@ async def create_rule(data: Dict) -> Dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            """INSERT INTO rules (rule_id, name, description, category, role, priority, condition, action, is_active)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *""",
+            """INSERT INTO rules (rule_id, name, description, category, role, priority, condition, action, example_original, example_adapted, is_active)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *""",
             data.get("rule_id"), data.get("name"), data.get("description"), data.get("category"),
-            data.get("role"), data.get("priority"), data.get("condition"), data.get("action"), data.get("is_active", True)
+            data.get("role"), data.get("priority"), data.get("condition"), data.get("action"),
+            data.get("example_original"), data.get("example_adapted"), data.get("is_active", True)
         )
         return dict(row)
 
@@ -169,13 +170,49 @@ async def update_rule(rule_id: str, data: Dict) -> Optional[Dict]:
     """Update an existing rule"""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """UPDATE rules SET name = $1, description = $2, category = $3, role = $4, priority = $5, 
-               condition = $6, action = $7, is_active = $8, updated_at = CURRENT_TIMESTAMP
-               WHERE rule_id = $9 RETURNING *""",
-            data.get("name"), data.get("description"), data.get("category"), data.get("role"),
-            data.get("priority"), data.get("condition"), data.get("action"), data.get("is_active"), rule_id
-        )
+        # Build dynamic query
+        update_fields = []
+        values = []
+        
+        if 'name' in data:
+            update_fields.append("name = $" + str(len(values) + 1))
+            values.append(data['name'])
+        if 'description' in data:
+            update_fields.append("description = $" + str(len(values) + 1))
+            values.append(data['description'])
+        if 'category' in data:
+            update_fields.append("category = $" + str(len(values) + 1))
+            values.append(data['category'])
+        if 'role' in data:
+            update_fields.append("role = $" + str(len(values) + 1))
+            values.append(data['role'])
+        if 'priority' in data:
+            update_fields.append("priority = $" + str(len(values) + 1))
+            values.append(data['priority'])
+        if 'condition' in data:
+            update_fields.append("condition = $" + str(len(values) + 1))
+            values.append(data['condition'])
+        if 'action' in data:
+            update_fields.append("action = $" + str(len(values) + 1))
+            values.append(data['action'])
+        if 'example_original' in data:
+            update_fields.append("example_original = $" + str(len(values) + 1))
+            values.append(data['example_original'])
+        if 'example_adapted' in data:
+            update_fields.append("example_adapted = $" + str(len(values) + 1))
+            values.append(data['example_adapted'])
+        if 'is_active' in data:
+            update_fields.append("is_active = $" + str(len(values) + 1))
+            values.append(data['is_active'])
+        
+        if not update_fields:
+            return None
+            
+        values.append(rule_id)
+        
+        query = "UPDATE rules SET " + ", ".join(update_fields) + ", updated_at = CURRENT_TIMESTAMP WHERE rule_id = $" + str(len(values)) + " RETURNING *"
+        
+        row = await conn.fetchrow(query, *values)
         return dict(row) if row else None
 
 
@@ -493,20 +530,72 @@ async def sync_rule_to_core(rule_id: str) -> bool:
         # Generate UUID5 from rule_id for consistent point IDs
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, rule["rule_id"]))
         
-        # Generate vector (mock - in production would use actual embeddings)
-        vector = [random.random() for _ in range(768)]
+        # Generate text for embedding from condition + action + examples
+        text_for_embedding = " ".join([
+            rule.get("category", ""),
+            rule.get("name", ""),
+            rule.get("condition", ""),
+            rule.get("action", ""),
+            rule.get("example_original", ""),
+            rule.get("example_adapted", ""),
+        ])
+        
+        # Clean up text
+        text_for_embedding = " ".join(text_for_embedding.split())
+        
+        # Import embedder from module 1
+        import sys
+        base_dir = os.path.join(os.path.dirname(__file__), '..', '..')
+        sys.path.insert(0, os.path.join(base_dir, 'module-1-core-engine', 'src'))
+        
+        from retriever.embeddings import get_embedder
+        
+        # Generate embedding via Ollama
+        ollama_host = os.getenv("OLLAMA_HOST", "ollama")
+        ollama_port = int(os.getenv("OLLAMA_PORT", "11434"))
+        embedder = get_embedder(host=ollama_host, port=ollama_port)
+        
+        embedding = await embedder.generate_embedding(text_for_embedding)
+        
+        if not embedding:
+            logger.warning(f"Failed to generate embedding for rule {rule_id}, using random vector")
+            vector = [random.random() for _ in range(768)]
+        else:
+            vector = embedding
+        
+        # Build payload with all required fields for Qdrant
+        payload = {
+            "rule_id": rule["rule_id"],
+            "category": rule.get("category", "general"),
+            "role": rule.get("role", "system"),
+            "priority": rule.get("priority", 50),
+            "condition": rule.get("condition", ""),
+            "name": rule.get("name", ""),
+            "description": rule.get("description", ""),
+            "action": rule.get("action", ""),
+            "transformation": rule.get("action", ""),
+            "transformation_prompt": rule.get("action", ""),
+            "example_original": rule.get("example_original", ""),
+            "example_adapted": rule.get("example_adapted", ""),
+            "is_active": rule.get("is_active", True),
+            "created_at": str(rule.get("created_at", "")),
+            "updated_at": str(rule.get("updated_at", "")),
+        }
         
         client.upsert(
             collection_name="corporate_rules",
             points=[PointStruct(
                 id=point_id,
                 vector=vector,
-                payload=rule
+                payload=payload
             )]
         )
+        logger.info(f"Synced rule {rule_id} to Qdrant with embedding")
         return True
     except Exception as e:
         logger.error(f"Failed to sync rule {rule_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -649,23 +738,62 @@ async def sync_all_styles_to_core() -> int:
                 vector = [random.random() for _ in range(768)]
                 
                 # Convert JSONB fields
+                examples = []
                 if style.get("examples") and isinstance(style["examples"], str):
-                    style["examples"] = json.loads(style["examples"])
+                    examples = json.loads(style["examples"])
+                elif style.get("examples") and isinstance(style["examples"], list):
+                    examples = style["examples"]
+                
+                # Extract tone/emotion_tags
+                tone = style.get("tone", "")
+                emotion_tags = []
+                if tone:
+                    if isinstance(tone, str):
+                        emotion_tags = [t.strip() for t in tone.split(",") if t.strip()]
+                    elif isinstance(tone, list):
+                        emotion_tags = tone
+                
+                # Build payload with all required fields for Qdrant
+                payload = {
+                    "style_id": style["style_id"],  # 'chekov', 'dovlatov', 'chekhov'
+                    "style_name": style.get("name", ""),  # 'чеховский' (кириллица)
+                    "author": "",  # Not in PostgreSQL, will be empty
+                    "sample_text": "",  # Not in PostgreSQL, will be empty
+                    "emotion_tags": emotion_tags,
+                    "category": style.get("category", "literary"),
+                    "tone": tone,
+                    "description": style.get("description", ""),
+                    "examples": examples,
+                }
+                
+                # Extract sample_text and author from examples if available
+                if examples and len(examples) > 0:
+                    first_example = examples[0]
+                    if isinstance(first_example, dict):
+                        payload["sample_text"] = first_example.get("output", "")
+                        note = first_example.get("note", "")
+                        if note and "Author:" in note:
+                            payload["author"] = note.replace("Author:", "").strip()
                 
                 client.upsert(
                     collection_name="artistic_styles",
                     points=[PointStruct(
                         id=point_id,
                         vector=vector,
-                        payload=style
+                        payload=payload
                     )]
                 )
                 success_count += 1
+                print(f"  Synced style: {style['style_id']} -> style_name: {payload['style_name']}")
             except Exception as e:
                 logger.error(f"Failed to sync style {style.get('style_id')}: {e}")
+                import traceback
+                traceback.print_exc()
                 
     except Exception as e:
         logger.error(f"Failed to connect to Qdrant: {e}")
+        import traceback
+        traceback.print_exc()
     
     return success_count
 

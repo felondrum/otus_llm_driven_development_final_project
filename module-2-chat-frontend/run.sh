@@ -42,7 +42,7 @@ fi
 
 echo "✓ Dockerfile найден"
 
-# Проверить наличие docker-compose.yml
+# Проверить наличие docker-compose.module.yml
 if [ ! -f "docker-compose.yml" ]; then
     echo "❌ docker-compose.yml не найден"
     exit 1

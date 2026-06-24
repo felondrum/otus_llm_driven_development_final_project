@@ -18,7 +18,7 @@ all_chat_messages = []
 
 
 # Import from websocket module (same directory)
-from websocket import STYLES, connection_manager, get_test_users
+from websocket import connection_manager, get_test_users, get_styles as websocket_get_styles
 
 # Import database module
 from database import (
@@ -85,6 +85,31 @@ async def get_chat_profiles_from_module3() -> list:
         return []
 
 
+async def get_styles_from_module3() -> list:
+    """Get styles from Module 3 Admin API"""
+    if not MODULE3_HTTP_ENABLED:
+        logger.warning("Module 3 HTTP client not available")
+        return []
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"http://{MODULE3_HOST}:{MODULE3_PORT}/api/v1/admin/styles",
+                timeout=5.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                styles = data.get("styles", [])
+                # Transform styles: extract style_id as id, name as name
+                return [{"id": s.get("style_id"), "name": s.get("name")} for s in styles]
+            else:
+                logger.warning(f"Failed to get styles from Module 3: {response.status_code}")
+                return []
+    except httpx.RequestError as e:
+        logger.warning(f"Failed to connect to Module 3: {e}")
+        return []
+
+
 async def sync_chat_profiles_from_module3() -> int:
     """Sync chat profiles from Module 3 to local database"""
     if not MODULE3_HTTP_ENABLED:
@@ -115,8 +140,9 @@ async def list_users():
 
 @api_router.get("/styles")
 async def list_styles():
-    """Get list of available styles"""
-    return {"styles": STYLES}
+    """Get list of available styles from Module 3 PostgreSQL"""
+    styles = await get_styles_from_module3()
+    return {"styles": styles}
 
 
 @api_router.get("/health")
