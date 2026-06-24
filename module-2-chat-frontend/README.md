@@ -219,6 +219,8 @@ cp .env.example .env
 | `WS_PORT` | `8081` | WebSocket порт |
 | `ORCHESTRATOR_HOST` | `localhost` | Хост Core Engine |
 | `ORCHESTRATOR_PORT` | `8001` | Порт gRPC Core Engine |
+| `MODULE3_HOST` | `localhost` | Хост Module 3 Admin API |
+| `MODULE3_PORT` | `8200` | Порт Module 3 Admin API |
 | `LOG_LEVEL` | `INFO` | Уровень логирования |
 | `CHAT_DB_PATH` | `/app/backend/chat_profiles.db` | Путь к SQLite файлу профилей |
 
@@ -254,6 +256,26 @@ Module 2 использует Core Engine для:
 3. **Синхронизации** - поддержание актуальности профилей
 
 Ключевое поле связи: `core_user_id` = `user_id` из Core Engine
+
+## Синхронизация профилей с Module 3
+
+Module 2 получает профили для чата из Module 3 через API:
+
+**Module 3 endpoints:**
+- **GET `/api/v1/admin/chat_profiles`** - получить все профили чата
+- **POST `/api/v1/admin/chat_profiles/sync`** - синхронизировать профили
+
+**Module 2 endpoints:**
+- **POST `/api/v1/profiles/sync_module3`** - синхронизировать профили из Module 3
+
+### Конфигурация
+
+Добавьте переменные в `.env`:
+
+```
+MODULE3_HOST=host.docker.internal
+MODULE3_PORT=8200
+```
 
 ## Верификация
 

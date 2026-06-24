@@ -19,9 +19,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY src/backend/ ./src/
 
-# Copy pre-generated proto files
-COPY src/backend/grpc_client/proto_gen/chameleon /app/backend/chameleon/
-
 # ===========================================
 # Stage 2: Production image
 # ===========================================

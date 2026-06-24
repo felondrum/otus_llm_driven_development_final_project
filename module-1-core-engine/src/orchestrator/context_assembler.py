@@ -105,18 +105,27 @@ class ContextAssembler:
                 # Handle both dict and Pydantic model (and protobuf)
                 # Protobuf uses transformation_prompt, Pydantic uses transformation
                 transformation = None
+                category = None
+                priority = 0
                 if isinstance(rule, dict):
                     transformation = rule.get("transformation_prompt") or rule.get("transformation")
+                    category = rule.get("category")
+                    priority = rule.get("priority", 0)
                 else:
                     # Check for protobuf/dict-like attribute
                     if hasattr(rule, "transformation_prompt"):
                         transformation = rule.transformation_prompt
                     elif hasattr(rule, "transformation"):
                         transformation = rule.transformation
+                    if hasattr(rule, "category"):
+                        category = rule.category
+                    if hasattr(rule, "priority"):
+                        priority = rule.priority
                 
                 if transformation:
+                    category_str = category if category else "general"
                     prompt_parts.append(
-                        f"{i}. [{rule.category}] Приоритет {rule.priority}: {transformation}"
+                        f"{i}. [{category_str}] Приоритет {priority}: {transformation}"
                     )
                 if hasattr(rule, "example_original") and hasattr(rule, "example_adapted"):
                     if rule.example_original and rule.example_adapted:

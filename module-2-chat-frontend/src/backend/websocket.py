@@ -14,12 +14,12 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Import gRPC client for Core Engine
+# Import HTTP client for Core Engine
 try:
-    from grpc_client.orchestrator_client import process_message
-    logger.info("Successfully imported gRPC client for Core Engine")
+    from http_client.orchestrator_client import process_message
+    logger.info("Successfully imported HTTP client for Core Engine")
 except ImportError as e:
-    logger.warning(f"Could not import gRPC client: {e}. Using fallback mode.")
+    logger.warning(f"Could not import HTTP client: {e}. Using fallback mode.")
     process_message = None
 
 
@@ -60,18 +60,25 @@ def get_container_id():
 # List of test users (loaded from database)
 from database import get_all_profiles, get_test_profiles
 
-try:
-    TEST_USERS = get_all_profiles()
-    if not TEST_USERS:
-        logger.info("No profiles in database, loading test profiles")
-        TEST_USERS = get_test_profiles()
-        # Insert test profiles into database
-        from database import insert_profile
-        for profile in TEST_USERS:
-            insert_profile(profile)
-except Exception as e:
-    logger.warning(f"Failed to load profiles from database: {e}. Using test profiles.")
-    TEST_USERS = get_test_profiles()
+
+def get_test_users() -> List[Dict]:
+    """Get test users from database (loads from PostgreSQL Module 3 directly)"""
+    try:
+        profiles = get_all_profiles()
+        if not profiles:
+            logger.info("No profiles in database, loading test profiles")
+            profiles = get_test_profiles()
+            # Insert test profiles into database
+            from database import insert_profile
+            for profile in profiles:
+                insert_profile(profile)
+        return profiles
+    except Exception as e:
+        logger.warning(f"Failed to load profiles from database: {e}. Using test profiles.")
+        return get_test_profiles()
+
+
+TEST_USERS = []  # Will be populated by get_test_users()
 
 
 @dataclass
@@ -197,7 +204,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await connection_manager.send_message(websocket, {
         "type": "welcome",
         "message": "Welcome to Chameleon Chat!",
-        "available_users": TEST_USERS
+        "available_users": get_test_users()
     })
     
     try:
@@ -234,13 +241,13 @@ async def handle_auth(websocket: WebSocket, message: dict, connection: Connectio
     user_id = message.get("user_id")
     
     # Simple auth - just check if user_id exists in test users
-    valid_users = [u["user_id"] for u in TEST_USERS]
+    valid_users = [u["user_id"] for u in get_test_users()]
     
     if user_id and user_id in valid_users:
         connection.user_id = user_id
         
         # Find user details
-        user_details = next((u for u in TEST_USERS if u["user_id"] == user_id), None)
+        user_details = next((u for u in get_test_users() if u["user_id"] == user_id), None)
         
         await connection_manager.send_message(websocket, {
             "type": "auth_ok",
@@ -274,7 +281,7 @@ async def handle_select_recipient(websocket: WebSocket, message: dict, connectio
         connection.selected_recipient = recipient_id
         
         # Find recipient details
-        recipient = next((u for u in TEST_USERS if u["user_id"] == recipient_id), None)
+        recipient = next((u for u in get_test_users() if u["user_id"] == recipient_id), None)
         
         await connection_manager.send_message(websocket, {
             "type": "recipient_selected",
@@ -357,7 +364,7 @@ async def handle_message(websocket: WebSocket, message: dict, connection: Connec
     if process_message:
         try:
             logger.info(f"Sending message to Core Engine: sender={connection.user_id} (UUID: {sender_uuid}), recipient={connection.selected_recipient} (UUID: {recipient_uuid}), style={style}")
-            result = process_message(
+            result = await process_message(
                 sender_id=sender_uuid,
                 recipient_id=recipient_uuid,
                 text=text,
@@ -369,7 +376,7 @@ async def handle_message(websocket: WebSocket, message: dict, connection: Connec
         except Exception as e:
             logger.error(f"Error calling Core Engine: {e}. Using original text.")
     else:
-        logger.info("gRPC client not available, using original text")
+        logger.info("HTTP client not available, using original text")
     
     # Build sender message
     sender_message = {

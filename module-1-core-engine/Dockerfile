@@ -24,7 +24,12 @@ COPY src/ ./src/
 COPY config/ ./config/
 COPY demo_data/ ./demo_data/
 COPY scripts/ ./scripts/
-COPY protos/ ./protos/
+
+# Generate protobuf stubs in the container
+RUN if [ -d "src/chameleon/core/v1" ] && [ -d "protos" ]; then \
+    poetry run python -m grpc_tools.protoc -I./protos --python_out=./src --grpc_python_out=./src ./protos/*.proto && \
+    poetry run bash scripts/fix_stub_imports.sh; \
+    fi
 
 # Expose ports
 EXPOSE 8001 8002 8003 8004

@@ -3,27 +3,12 @@
 import os
 import sys
 import yaml
-import grpc
-from concurrent import futures
 from typing import Dict, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Import gRPC modules
-sys.path.insert(
-    0,
-    os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "chameleon",
-        "core",
-        "v1",
-    ),
-)
-import chameleon.core.v1.llm_gateway_pb2 as llm_gateway_pb2
-import chameleon.core.v1.llm_gateway_pb2_grpc as llm_gateway_pb2_grpc
 
 # Import common modules
 from common.logging import logger, log_info, log_error
@@ -55,7 +40,6 @@ _load_balancer: Optional[LoadBalancer] = None
 _circuit_breaker: Optional[CircuitBreaker] = None
 _provider_map: Dict[str, LLMProvider] = {}
 _fallback_chain: list = []
-_grpc_server: Optional[grpc.Server] = None
 
 
 class GenerateRequest(BaseModel):
@@ -224,69 +208,6 @@ async def health_check():
     return HealthResponse(status=status, version="1.0.0", checks=checks)
 
 
-# gRPC Server Implementation
-class LLMGatewayService(llm_gateway_pb2_grpc.LLMGatewayServiceServicer):
-    """gRPC service implementation for LLM Gateway."""
-
-    async def HealthCheck(self, request, context):
-        """Health check endpoint."""
-        checks = {}
-        status = "healthy"
-
-        # Check providers
-        for provider_key, provider in _provider_map.items():
-            try:
-                result = await provider.health_check()
-                checks[provider_key] = "ok" if result else "error"
-                if not result:
-                    status = "degraded"
-            except Exception as e:
-                checks[provider_key] = f"error: {e}"
-                status = "degraded"
-
-        # Check cache connection
-        try:
-            if _cache:
-                _cache.client.ping()
-                checks["cache"] = "ok"
-            else:
-                checks["cache"] = "not_initialized"
-                status = "degraded"
-        except Exception as e:
-            checks["cache"] = f"error: {e}"
-            status = "degraded"
-
-        return llm_gateway_pb2.HealthStatus(
-            status=status, version="1.0.0", checks=checks
-        )
-
-
-def start_grpc_server(port: int = 8004):
-    """Start gRPC server."""
-    global _grpc_server
-
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    llm_gateway_pb2_grpc.add_LLMGatewayServiceServicer_to_server(
-        LLMGatewayService(), server
-    )
-    server.add_insecure_port(f"[::]:{port}")
-
-    logger.info(f"LLM Gateway gRPC server starting on port {port}")
-    server.start()
-    logger.info(f"LLM Gateway gRPC server started on port {port}")
-    _grpc_server = server
-    return server
-
-
-def stop_grpc_server():
-    """Stop gRPC server."""
-    global _grpc_server
-    if _grpc_server:
-        _grpc_server.stop(5)
-        logger.info("LLM Gateway gRPC server stopped")
-        _grpc_server = None
-
-
 @app.post("/generate", response_model=GenerateResponse)
 @measure_latency(service="llm_gateway", endpoint="/generate")
 async def generate(request: GenerateRequest):
@@ -311,7 +232,7 @@ async def generate(request: GenerateRequest):
             
             # Log cache hit to Langfuse
             try:
-                log_generation(
+                with log_generation(
                     name="generation-cache-hit",
                     model=model,
                     prompt=request.prompt,
@@ -324,7 +245,8 @@ async def generate(request: GenerateRequest):
                         "from_cache": True,
                         "latency_ms": cached.get("latency_ms", 0),
                     },
-                )
+                ):
+                    pass  # Generation is logged within the context
             except Exception as e:
                 log_error("Failed to log cache hit to Langfuse", error=str(e))
             
@@ -378,7 +300,7 @@ async def generate(request: GenerateRequest):
 
                 # Log generation to Langfuse
                 try:
-                    log_generation(
+                    with log_generation(
                         name=f"generation-{current_model}",
                         model=current_model,
                         prompt=request.prompt,
@@ -391,7 +313,8 @@ async def generate(request: GenerateRequest):
                                 else "unknown"
                             )
                         },
-                    )
+                    ):
+                        pass  # Generation is logged within the context
                 except Exception as e:
                     log_error("Failed to log to Langfuse", error=str(e))
 
@@ -451,14 +374,5 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("PORT", 8003))
-    grpc_port = int(os.getenv("GRPC_PORT", 8004))
-
-    # Start gRPC server in a separate thread
-    import threading
-
-    grpc_thread = threading.Thread(
-        target=lambda: start_grpc_server(grpc_port), daemon=True
-    )
-    grpc_thread.start()
 
     uvicorn.run(app, host="0.0.0.0", port=port)

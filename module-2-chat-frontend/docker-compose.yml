@@ -18,6 +18,12 @@ services:
       - CHAT_INSTANCE=1
       - ORCHESTRATOR_HOST=host.docker.internal
       - ORCHESTRATOR_PORT=8001
+      - RETRIEVER_HOST=host.docker.internal
+      - RETRIEVER_PORT=8002
+      - CORE_ENGINE_HTTP_HOST=host.docker.internal
+      - CORE_ENGINE_HTTP_PORT=8001
+      - MODULE3_HOST=host.docker.internal
+      - MODULE3_PORT=8200
       - REDIS_HOST=host.docker.internal
       - REDIS_PORT=6379
       - REDIS_PASSWORD=redis123
@@ -34,4 +40,5 @@ volumes:
 
 networks:
   chameleon-network:
-    driver: bridge
+    external: true
+    name: chameleon-network

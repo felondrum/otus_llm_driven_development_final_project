@@ -30,6 +30,9 @@ def init_langfuse(
     _langfuse = Langfuse(public_key=public_key, secret_key=secret_key, host=host)
     logger.info(f"Langfuse initialized with host: {host}")
 
+    # Setup OpenTelemetry exporter explicitly to ensure traces reach Langfuse worker
+    # _setup_otel_exporter() - function removed, OTLP settings are configured in docker-compose
+
     # DO NOT override OTEL environment variables - they are already set in docker-compose
     # The worker listens on port 4317 for GRPC data
     # OTEL_EXPORTER_OTLP_ENDPOINT=http://langfuse-worker:4317 (set in docker-compose)

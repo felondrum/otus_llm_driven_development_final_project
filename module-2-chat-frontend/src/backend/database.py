@@ -15,22 +15,45 @@ logger = logging.getLogger(__name__)
 # Database path
 DB_PATH = os.environ.get("CHAT_DB_PATH", "/app/backend/chat_profiles.db")
 
-# Core Engine gRPC client
+# Core Engine HTTP client
 try:
-    from grpc_client.orchestrator_client import get_profile as grpc_get_profile
-    logger.info("Successfully imported gRPC client for Core Engine")
-    GRPC_ENABLED = True
+    from http_client.orchestrator_client import get_profile_sync
+    logger.info("Successfully imported sync HTTP client for Core Engine")
+    HTTP_ENABLED = True
 except ImportError as e:
-    logger.warning(f"Could not import gRPC client: {e}. Using fallback mode.")
-    GRPC_ENABLED = False
-    grpc_get_profile = None
+    logger.warning(f"Could not import HTTP client: {e}. Using fallback mode.")
+    HTTP_ENABLED = False
+    get_profile_sync = None
 
-# Also try to import process_message (used in websocket)
+# Also try to import process_message_sync (used in websocket)
 try:
-    from grpc_client.orchestrator_client import process_message
-    logger.info("Successfully imported process_message from gRPC client")
+    from http_client.orchestrator_client import process_message_sync
+    logger.info("Successfully imported process_message_sync from HTTP client")
+    HTTP_PROCESS_ENABLED = True
 except ImportError:
-    logger.warning("Could not import process_message from gRPC client")
+    logger.warning("Could not import process_message_sync from HTTP client")
+    process_message_sync = None
+
+# Module 3 Admin API connection (PostgreSQL)
+# Try importing requests first (for synchronous HTTP calls)
+try:
+    import requests
+    MODULE3_HTTP_ENABLED = True
+    logger.info("Successfully imported requests for Module 3")
+except ImportError:
+    logger.warning("Could not import requests for Module 3")
+    MODULE3_HTTP_ENABLED = False
+
+# Also try httpx for async operations
+try:
+    import httpx
+    MODULE3_HTTPX_ENABLED = True
+except ImportError:
+    logger.warning("Could not import httpx for Module 3")
+    MODULE3_HTTPX_ENABLED = False
+
+MODULE3_HOST = os.environ.get("MODULE3_HOST", "127.0.0.1")
+MODULE3_PORT = os.environ.get("MODULE3_PORT", "8200")
 
 
 def get_db_connection():
@@ -40,8 +63,36 @@ def get_db_connection():
     return conn
 
 
-def init_database():
-    """Initialize database with profiles table"""
+def load_profiles_from_module3_sync() -> List[Dict]:
+    """Load profiles from Module 3 PostgreSQL via HTTP (synchronous)"""
+    if not MODULE3_HTTP_ENABLED:
+        logger.warning("Module 3 HTTP client not available")
+        return []
+    
+    profiles = []
+    
+    try:
+        response = requests.get(
+            f"http://{MODULE3_HOST}:{MODULE3_PORT}/api/v1/admin/chat_profiles",
+            timeout=10.0
+        )
+        if response.status_code == 200:
+            data = response.json()
+            profiles = data.get("chat_profiles", [])
+            logger.info(f"Loaded {len(profiles)} profiles from Module 3 PostgreSQL")
+        else:
+            logger.warning(f"Failed to load profiles from Module 3: {response.status_code}")
+    except requests.RequestException as e:
+        logger.error(f"Failed to connect to Module 3: {e}")
+    except Exception as e:
+        logger.error(f"Error loading profiles from Module 3: {e}")
+    
+    return profiles
+
+
+async def init_database_and_load_profiles():
+    """Initialize database and load profiles from Module 3 PostgreSQL"""
+    # Initialize SQLite (for backward compatibility and caching)
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -63,12 +114,34 @@ def init_database():
     conn.commit()
     conn.close()
     logger.info(f"Database initialized at {DB_PATH}")
+    
+    # Try to load profiles from Module 3 PostgreSQL
+    profiles = load_profiles_from_module3_sync()
+    
+    if not profiles:
+        logger.info("No profiles from Module 3, using test profiles")
+        profiles = get_test_profiles()
+        for profile in profiles:
+            insert_profile(profile)
+    else:
+        # Clear existing profiles and insert from Module 3
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM profiles")
+        conn.commit()
+        conn.close()
+        
+        for profile in profiles:
+            insert_profile(profile)
+        logger.info(f"Loaded {len(profiles)} profiles from Module 3")
+    
+    return profiles
 
 
 def load_profiles_from_core_engine():
-    """Load profiles from Core Engine via gRPC"""
-    if not GRPC_ENABLED or grpc_get_profile is None:
-        logger.warning("gRPC client not available, cannot load profiles from Core Engine")
+    """Load profiles from Core Engine via HTTP (synchronous)"""
+    if not HTTP_ENABLED or get_profile_sync is None:
+        logger.warning("HTTP client not available, cannot load profiles from Core Engine")
         return []
     
     profiles = []
@@ -82,7 +155,7 @@ def load_profiles_from_core_engine():
     
     for user_id in demo_user_ids:
         try:
-            profile = grpc_get_profile(user_id)
+            profile = get_profile_sync(user_id)
             if profile:
                 profiles.append(profile)
                 logger.info(f"Loaded profile for {user_id} from Core Engine")
@@ -123,46 +196,40 @@ def insert_profile(profile: Dict):
 
 
 def get_all_profiles() -> List[Dict]:
-    """Get all profiles from database"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    """Get all profiles from PostgreSQL (Module 3) directly without caching"""
+    # Try to load from PostgreSQL Module 3 directly
+    if MODULE3_HTTP_ENABLED:
+        try:
+            profiles = load_profiles_from_module3_sync()
+            
+            if profiles:
+                logger.info(f"Loaded {len(profiles)} profiles directly from Module 3 PostgreSQL")
+                return profiles
+        except Exception as e:
+            logger.error(f"Failed to load profiles from Module 3 directly: {e}")
     
-    cursor.execute("SELECT * FROM profiles ORDER BY full_name")
-    rows = cursor.fetchall()
-    conn.close()
-    
-    profiles = []
-    for row in rows:
-        profile = dict(row)
-        # Convert known_triggers from JSON string
-        if profile.get("known_triggers"):
-            try:
-                profile["known_triggers"] = json.loads(profile["known_triggers"])
-            except json.JSONDecodeError:
-                profile["known_triggers"] = []
-        profiles.append(profile)
-    
-    return profiles
+    # Fallback to test profiles
+    return get_test_profiles()
 
 
 def get_profile_by_user_id(user_id: str) -> Optional[Dict]:
-    """Get a profile by user_id"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    """Get a profile by user_id from PostgreSQL (Module 3) directly without caching"""
+    # Try to load from PostgreSQL Module 3 directly
+    if MODULE3_HTTP_ENABLED:
+        try:
+            profiles = load_profiles_from_module3_sync()
+            
+            # Find the requested profile
+            for profile in profiles:
+                if profile.get("user_id") == user_id:
+                    return profile
+        except Exception as e:
+            logger.error(f"Failed to load profiles from Module 3 directly: {e}")
     
-    cursor.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    
-    if row:
-        profile = dict(row)
-        # Convert known_triggers from JSON string
-        if profile.get("known_triggers"):
-            try:
-                profile["known_triggers"] = json.loads(profile["known_triggers"])
-            except json.JSONDecodeError:
-                profile["known_triggers"] = []
-        return profile
+    # Fallback to test profiles
+    for profile in get_test_profiles():
+        if profile.get("user_id") == user_id:
+            return profile
     
     return None
 
@@ -179,27 +246,36 @@ def delete_profile(user_id: str):
 
 
 def sync_with_core_engine():
-    """Sync profiles with Core Engine"""
-    if not GRPC_ENABLED or grpc_get_profile is None:
-        logger.warning("gRPC client not available, cannot sync with Core Engine")
+    """Sync profiles with Core Engine (synchronous)"""
+    if not HTTP_ENABLED or get_profile_sync is None:
+        logger.warning("HTTP client not available, cannot sync with Core Engine")
         return False
     
-    # Load profiles from Core Engine
-    profiles = load_profiles_from_core_engine()
-    
-    # Clear existing profiles
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM profiles")
-    conn.commit()
-    conn.close()
-    
-    # Insert new profiles
-    for profile in profiles:
-        insert_profile(profile)
-    
-    logger.info(f"Synced {len(profiles)} profiles with Core Engine")
-    return True
+    try:
+        # Load profiles from Core Engine (synchronous)
+        profiles = load_profiles_from_core_engine()
+        
+        # Clear existing profiles
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM profiles")
+        conn.commit()
+        conn.close()
+        
+        # Insert new profiles
+        for profile in profiles:
+            insert_profile(profile)
+        
+        logger.info(f"Synced {len(profiles)} profiles with Core Engine")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to sync with Core Engine: {e}")
+        return False
+
+
+async def sync_with_core_engine_async():
+    """Async version of sync_with_core_engine for use in async contexts"""
+    return sync_with_core_engine()
 
 
 def get_test_profiles() -> List[Dict]:

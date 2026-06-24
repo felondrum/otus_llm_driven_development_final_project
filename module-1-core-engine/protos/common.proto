@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package chameleon.core.v1;
-
-message HealthStatus {
-    string status = 1;
-    string version = 2;
-    map<string, string> checks = 3;
-}

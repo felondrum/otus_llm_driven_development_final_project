@@ -4,5 +4,6 @@ websockets==12.0
 grpcio==1.81.1
 protobuf>=6.22.0,<7.0
 httpx==0.26.0
+requests==2.31.0
 python-dotenv==1.0.0
 redis==5.0.1

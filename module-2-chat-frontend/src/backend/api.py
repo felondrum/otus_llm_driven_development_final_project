@@ -2,6 +2,7 @@
 # REST API endpoints for Chat Frontend
 # ===========================================
 
+import os
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 import logging
@@ -17,39 +18,99 @@ all_chat_messages = []
 
 
 # Import from websocket module (same directory)
-from websocket import TEST_USERS, STYLES, connection_manager
+from websocket import STYLES, connection_manager, get_test_users
 
 # Import database module
 from database import (
-    init_database, get_all_profiles, get_profile_by_user_id,
-    insert_profile, delete_profile, sync_with_core_engine,
+    init_database_and_load_profiles, get_all_profiles, get_profile_by_user_id,
+    insert_profile, delete_profile, sync_with_core_engine, sync_with_core_engine_async,
     get_test_profiles, DB_PATH
 )
 
-# Initialize database on import
-init_database()
-
-# Try to sync with Core Engine, fallback to test profiles
+# Import HTTP client for Module 3 Admin API
 try:
-    profiles = get_all_profiles()
-    if not profiles:
-        logger.info("No profiles in database, loading test profiles")
-        test_profiles = get_test_profiles()
-        for profile in test_profiles:
-            insert_profile(profile)
-        profiles = test_profiles
-    TEST_USERS = profiles
-except Exception as e:
-    logger.warning(f"Failed to load profiles from database: {e}. Using test profiles.")
-    TEST_USERS = get_test_profiles()
+    import httpx
+    MODULE3_HTTP_ENABLED = True
+except ImportError:
+    logger.warning("Could not import httpx for Module 3")
+    MODULE3_HTTP_ENABLED = False
+
+# Module 3 Admin API connection (take from environment variables)
+MODULE3_HOST = os.environ.get("MODULE3_HOST", "127.0.0.1")
+MODULE3_PORT = os.environ.get("MODULE3_PORT", "8200")
+
+# Initialize database and load profiles from Module 3 on import
+import asyncio
+
+async def init_app_profiles():
+    """Initialize application profiles from Module 3"""
+    try:
+        profiles = await init_database_and_load_profiles()
+        return profiles
+    except Exception as e:
+        logger.error(f"Failed to initialize profiles: {e}")
+        return None
+
+# Run async initialization synchronously during module import
+# TEST_USERS is now loaded dynamically from get_test_users()
+logger.info("Profile initialization completed - TEST_USERS loaded dynamically from Module 3")
 
 # These are now just data, not async functions
+
+
+# ===========================================
+# Module 3 Admin API functions
+# ===========================================
+
+async def get_chat_profiles_from_module3() -> list:
+    """Get chat profiles from Module 3 Admin API"""
+    if not MODULE3_HTTP_ENABLED:
+        logger.warning("Module 3 HTTP client not available")
+        return []
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"http://{MODULE3_HOST}:{MODULE3_PORT}/api/v1/admin/chat_profiles",
+                timeout=5.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("chat_profiles", [])
+            else:
+                logger.warning(f"Failed to get chat profiles from Module 3: {response.status_code}")
+                return []
+    except httpx.RequestError as e:
+        logger.warning(f"Failed to connect to Module 3: {e}")
+        return []
+
+
+async def sync_chat_profiles_from_module3() -> int:
+    """Sync chat profiles from Module 3 to local database"""
+    if not MODULE3_HTTP_ENABLED:
+        logger.warning("Module 3 HTTP client not available")
+        return 0
+    
+    profiles = await get_chat_profiles_from_module3()
+    count = 0
+    
+    for profile in profiles:
+        try:
+            insert_profile(profile)
+            count += 1
+        except Exception as e:
+            logger.error(f"Failed to insert profile {profile.get('user_id')}: {e}")
+    
+    logger.info(f"Synced {count} chat profiles from Module 3")
+    return count
 
 
 @api_router.get("/users")
 async def list_users():
     """Get list of test users"""
-    return {"users": TEST_USERS}
+    # Load users dynamically from database (Module 3 PostgreSQL)
+    users = get_test_users()
+    return {"users": users}
 
 
 @api_router.get("/styles")
@@ -109,6 +170,18 @@ async def save_message(recipient_id: str, message: dict):
 # ===========================================
 # Profile management endpoints
 # ===========================================
+
+# MUST be before /profiles and /profiles/{user_id} due to route matching order
+@api_router.post("/profiles/sync_module3")
+async def sync_profiles_module3():
+    """Sync profiles from Module 3 Admin API"""
+    try:
+        count = await sync_chat_profiles_from_module3()
+        return {"status": "synced", "count": count}
+    except Exception as e:
+        logger.error(f"Error syncing profiles from Module 3: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @api_router.get("/profiles")
 async def list_profiles():

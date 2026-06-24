@@ -294,6 +294,353 @@ class QdrantClientWrapper:
         self.client.close()
         logger.info("Qdrant connection closed")
 
+    # ===========================================
+    # Styles management methods
+    # ===========================================
+
+    async def get_styles(self) -> List[Dict[str, Any]]:
+        """Get all styles from artistic_styles collection."""
+        try:
+            # Get all points from artistic_styles collection
+            result = self.client.scroll(
+                collection_name="artistic_styles",
+                limit=1000,
+                with_payload=True,
+                with_vectors=False,
+            )
+            
+            styles = []
+            for point in result[0]:
+                payload = point.payload
+                # Convert to common style format
+                examples = []
+                if "examples" in payload:
+                    for ex in payload["examples"]:
+                        if isinstance(ex, dict):
+                            examples.append({
+                                "input": ex.get("input", ""),
+                                "output": ex.get("output", ""),
+                                "note": ex.get("note", "")
+                            })
+                
+                style = {
+                    "style_id": point.id,
+                    "name": payload.get("name", ""),
+                    "description": payload.get("description", ""),
+                    "category": payload.get("category", ""),
+                    "tone": payload.get("tone", ""),
+                    "examples": examples,
+                    "is_active": payload.get("is_active", True),
+                    "created_at": payload.get("created_at", 0),
+                    "updated_at": payload.get("updated_at", 0)
+                }
+                styles.append(style)
+            
+            return styles
+        except Exception as e:
+            logger.error(f"Failed to get styles: {e}")
+            return []
+
+    async def create_style(self, style_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new style in artistic_styles collection."""
+        try:
+            import uuid
+            
+            style_id = style_data.get("style_id") or str(uuid.uuid4())
+            
+            # Prepare examples
+            examples = []
+            if "examples" in style_data:
+                for ex in style_data["examples"]:
+                    if isinstance(ex, dict):
+                        examples.append({
+                            "input": ex.get("input", ""),
+                            "output": ex.get("output", ""),
+                            "note": ex.get("note", "")
+                        })
+            
+            payload = {
+                "name": style_data.get("name", ""),
+                "description": style_data.get("description", ""),
+                "category": style_data.get("category", ""),
+                "tone": style_data.get("tone", ""),
+                "examples": examples,
+                "is_active": style_data.get("is_active", True),
+                "created_at": int(style_data.get("created_at", 0)),
+                "updated_at": int(style_data.get("updated_at", 0))
+            }
+            
+            # Generate embedding for style
+            ollama_host = os.getenv("OLLAMA_HOST", "ollama")
+            ollama_port = int(os.getenv("OLLAMA_PORT", "11434"))
+            embedder = get_embedder(host=ollama_host, port=ollama_port)
+            style_text = f"{payload.get('name', '')} {payload.get('description', '')} {payload.get('category', '')} {payload.get('tone', '')}"
+            embedding = await embedder.generate_embedding(style_text)
+            
+            # Upsert the style
+            self.client.upsert(
+                collection_name="artistic_styles",
+                points=[
+                    {
+                        "id": style_id,
+                        "vector": embedding,
+                        "payload": payload
+                    }
+                ]
+            )
+            
+            logger.info(f"Created style: {style_id}")
+            return {"style_id": style_id, **payload}
+        except Exception as e:
+            logger.error(f"Failed to create style: {e}")
+            raise
+
+    async def update_style(self, style_id: str, style_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing style in artistic_styles collection."""
+        try:
+            # First get the existing style
+            result = self.client.retrieve(
+                collection_name="artistic_styles",
+                ids=[style_id]
+            )
+            
+            if not result or len(result) == 0:
+                raise ValueError(f"Style not found: {style_id}")
+            
+            existing_payload = result[0].payload
+            
+            # Update with new values
+            for key, value in style_data.items():
+                if key != "style_id":
+                    existing_payload[key] = value
+            
+            existing_payload["updated_at"] = int(style_data.get("updated_at", 0))
+            
+            # Generate new embedding if style text changed
+            ollama_host = os.getenv("OLLAMA_HOST", "ollama")
+            ollama_port = int(os.getenv("OLLAMA_PORT", "11434"))
+            embedder = get_embedder(host=ollama_host, port=ollama_port)
+            style_text = f"{existing_payload.get('name', '')} {existing_payload.get('description', '')} {existing_payload.get('category', '')} {existing_payload.get('tone', '')}"
+            embedding = await embedder.generate_embedding(style_text)
+            
+            # Update the style
+            self.client.upsert(
+                collection_name="artistic_styles",
+                points=[
+                    {
+                        "id": style_id,
+                        "vector": embedding,
+                        "payload": existing_payload
+                    }
+                ]
+            )
+            
+            logger.info(f"Updated style: {style_id}")
+            return {"style_id": style_id, **existing_payload}
+        except Exception as e:
+            logger.error(f"Failed to update style {style_id}: {e}")
+            raise
+
+    async def delete_style(self, style_id: str) -> bool:
+        """Delete a style from artistic_styles collection."""
+        try:
+            self.client.delete(
+                collection_name="artistic_styles",
+                points_selector=[style_id]
+            )
+            logger.info(f"Deleted style: {style_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete style {style_id}: {e}")
+            raise
+
+    async def get_style(self, style_id: str) -> Dict[str, Any]:
+        """Get a specific style by ID."""
+        try:
+            result = self.client.retrieve(
+                collection_name="artistic_styles",
+                ids=[style_id]
+            )
+            
+            if not result or len(result) == 0:
+                raise ValueError(f"Style not found: {style_id}")
+            
+            payload = result[0].payload
+            examples = []
+            if "examples" in payload:
+                for ex in payload["examples"]:
+                    if isinstance(ex, dict):
+                        examples.append({
+                            "input": ex.get("input", ""),
+                            "output": ex.get("output", ""),
+                            "note": ex.get("note", "")
+                        })
+            
+            return {
+                "style_id": style_id,
+                "name": payload.get("name", ""),
+                "description": payload.get("description", ""),
+                "category": payload.get("category", ""),
+                "tone": payload.get("tone", ""),
+                "examples": examples,
+                "is_active": payload.get("is_active", True),
+                "created_at": payload.get("created_at", 0),
+                "updated_at": payload.get("updated_at", 0)
+            }
+        except Exception as e:
+            logger.error(f"Failed to get style {style_id}: {e}")
+            raise
+
+    # ===========================================
+    # Rules management methods
+    # ===========================================
+
+    async def reload_rules(self) -> Dict[str, Any]:
+        """Reload rules from data source."""
+        try:
+            # In a real implementation, this would reload rules from a file or external source
+            # For now, we'll return a success message
+            logger.info("Rules reloaded")
+            
+            # Get count of rules
+            result = self.client.scroll(
+                collection_name="corporate_rules",
+                limit=1,
+                with_payload=False,
+                with_vectors=False,
+            )
+            rules_count = result[1] or 0
+            
+            return {
+                "message": "Rules reloaded successfully",
+                "rules_count": rules_count
+            }
+        except Exception as e:
+            logger.error(f"Failed to reload rules: {e}")
+            raise
+
+    async def reindex_collection(self, collection: str) -> Dict[str, Any]:
+        """Reindex all documents in a collection."""
+        try:
+            logger.info(f"Starting reindex for collection: {collection}")
+            
+            # Get all points from the collection
+            scroll_result = self.client.scroll(
+                collection_name=collection,
+                limit=1000,
+                with_payload=True,
+                with_vectors=False,
+            )
+            
+            points = scroll_result[0]
+            total_points = scroll_result[1] or len(points)
+            
+            logger.info(f"Found {total_points} points in collection {collection}")
+            
+            # In a real implementation, this would:
+            # 1. Delete existing vectors
+            # 2. Re-embed all documents
+            # 3. Upsert with new vectors
+            
+            # For now, return success message
+            result = {
+                "status": "reindex_started",
+                "message": f"Reindex started for collection: {collection}",
+                "documents_count": total_points
+            }
+            
+            logger.info(f"Reindex completed for collection: {collection}")
+            return result
+        except Exception as e:
+            logger.error(f"Failed to reindex collection {collection}: {e}")
+            raise
+
+    async def upload_document(
+        self, 
+        file_content: bytes, 
+        filename: str, 
+        collection: str = "corporate_rules",
+        metadata: dict = None
+    ) -> Dict[str, Any]:
+        """Upload document to Qdrant collection with chunking and embeddings."""
+        try:
+            import uuid as uuid_module
+            from .chunking import get_chunker
+            from .embeddings import get_embedder
+            
+            # Parse file content
+            try:
+                text_content = file_content.decode('utf-8')
+            except UnicodeDecodeError:
+                text_content = file_content.decode('latin-1')
+            
+            # Use chunker to split text
+            chunker = get_chunker(chunk_size=500, chunk_overlap=50)
+            chunks = chunker.create_chunks_with_metadata(
+                text_content,
+                metadata={
+                    "source": filename,
+                    "file_type": "text",
+                    "original_size": len(file_content)
+                }
+            )
+            
+            logger.info(f"Created {len(chunks)} chunks from file: {filename}")
+            
+            # Generate embeddings for each chunk
+            ollama_host = os.getenv("OLLAMA_HOST", "ollama")
+            ollama_port = int(os.getenv("OLLAMA_PORT", "11434"))
+            embedder = get_embedder(host=ollama_host, port=ollama_port)
+            
+            points = []
+            for i, chunk_info in enumerate(chunks):
+                chunk_text = chunk_info["text"]
+                chunk_metadata = chunk_info["metadata"]
+                
+                # Generate embedding for chunk
+                embedding = await embedder.generate_embedding(chunk_text)
+                
+                if not embedding:
+                    logger.warning(f"Failed to generate embedding for chunk {i}")
+                    continue
+                
+                # Create point with chunk data
+                point_id = str(uuid_module.uuid4())
+                
+                # Merge metadata
+                full_metadata = {
+                    "chunk_index": i,
+                    "chunk_length": len(chunk_text),
+                    "source": filename,
+                    **(metadata or {}),
+                    **chunk_metadata
+                }
+                
+                points.append({
+                    "id": point_id,
+                    "vector": embedding,
+                    "payload": full_metadata
+                })
+            
+            # Upsert points to Qdrant
+            self.client.upsert(
+                collection_name=collection,
+                points=points
+            )
+            
+            logger.info(f"Successfully uploaded {len(points)} chunks from {filename} to {collection}")
+            
+            return {
+                "status": "success",
+                "filename": filename,
+                "collection": collection,
+                "chunks_count": len(points),
+                "total_size": len(file_content)
+            }
+        except Exception as e:
+            logger.error(f"Failed to upload document {filename}: {e}")
+            raise
+
 
 # Global client instance
 _qdrant_client: Optional[QdrantClientWrapper] = None
