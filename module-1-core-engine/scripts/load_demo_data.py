@@ -57,12 +57,24 @@ def load_styles(client: QdrantClient):
         # Generate UUID5 from style_id for consistent point IDs
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, style["style_id"]))
         vector = [random.random() for _ in range(768)]
+        
+        # Build payload with all required fields
+        payload = {
+            "style_id": style["style_id"],  # 'chekhov'
+            "style_name": style["style_name"],  # 'чеховский'
+            "author": style["author"],  # 'Антон Чехов'
+            "sample_text": style["sample_text"],  # full example text
+            "emotion_tags": style.get("emotion_tags", []),
+            "era": style.get("era", ""),
+            "category": "literary",
+        }
+        
         client.upsert(
             collection_name="artistic_styles",
             points=[PointStruct(
                 id=point_id,
                 vector=vector,
-                payload=style
+                payload=payload
             )]
         )
     print(f"Loaded {len(styles)} styles")

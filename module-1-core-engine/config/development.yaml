@@ -48,3 +48,25 @@ fallback:
     - ollama:qwen2.5:1.5b
     - yandex:ya-llm
   return_original_on_fallback: true
+
+classification:
+  enabled: auto  # auto = включается при наличии категорий в Qdrant
+  llm_gateway_model: ollama:qwen2.5:1.5b  # через LLM Gateway
+  categories:
+    - приветствие
+    - прощание
+    - грубость
+    - лесть
+    - критика
+    - комплимент
+    - жалоба
+    - запрос
+    - информация
+    - эмоция
+  prompt_template: |
+    Классифицируй сообщение пользователя по следующим категориям: {categories}
+    Верни ТОЛЬКО название категории из списка.
+    
+    Сообщение: "{text}"
+    
+    Категория:

@@ -937,7 +937,3 @@ flowchart TB
 | Langfuse | https://langfuse.com/docs |
 | RAGas | https://docs.ragas.io/ |
 | gRPC Python | https://grpc.io/docs/languages/python/ |
-
-### C. Архитектурные паттерны (использованные)
-
-| Паттерн | Где используется |

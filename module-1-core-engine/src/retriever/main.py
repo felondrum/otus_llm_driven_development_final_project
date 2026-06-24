@@ -512,13 +512,14 @@ async def search_rules(
 @app.get("/api/v1/culture/search")
 async def search_culture(
     query: str,
-    limit: int = 3
+    limit: int = 3,
+    category: Optional[str] = None
 ):
     """Search for culture chunks by query text."""
-    log_info("SearchCulture request", query=query[:50])
+    log_info("SearchCulture request", query=query[:50], category=category)
     
     qdrant = get_qdrant_instance()
-    chunks = await qdrant.get_culture_chunks(query_text=query, limit=limit)
+    chunks = await qdrant.get_culture_chunks(query_text=query, limit=limit, filter_category=category)
     track_cache_ttl_hit(cache_type="culture_chunks")
     
     return {"chunks": chunks}

@@ -360,7 +360,3 @@ docker-compose up -d
 
 1. Обновить `src/backend/api.py` - добавить endpoint
 2. Обновить `src/frontend/src/services/api.js` - вызов API
-
-## Лицензия
-
-MIT

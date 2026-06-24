@@ -170,7 +170,3 @@ DELETE FROM documents WHERE document_id LIKE 'test_%';
 ### Проблема: Timeout на соединение
 
 **Решение:** Увеличьте таймаут в Docker Compose или проверьте сетевые настройки.
-
-## Лицензия
-
-Copyright (c) 2024 Chameleon Team. All rights reserved.

@@ -612,7 +612,3 @@ poetry run pytest tests/unit/ -v
 # Покрытие кода
 poetry run pytest tests/ --cov=src --cov-report=term-missing
 ```
-
-## Лицензия
-
-MIT

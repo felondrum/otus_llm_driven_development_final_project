@@ -234,6 +234,35 @@ const Documents = () => {
         {selectedFile && <div className="file-info">Выбрано: {selectedFile.name}</div>}
       </div>
 
+      <div className="upload-help">
+        <h3>Формат загружаемых файлов:</h3>
+        <h4>Корпоративные правила (corporate_rules.md):</h4>
+        <pre>
+## 1. Правило: Название
+- **category**: категория (грубость, адрес, тон и т.д.)
+- **role**: system
+- **priority**: 1-100
+- **condition**: условие применения
+- **name**: Название
+- **description**: Описание
+- **action**: действие при нарушении
+- **example_original**: грубая формулировка
+- **example_adapted**: вежливая адаптация
+        </pre>
+        <h4>Корпоративная культура (corporate_culture_new.md):</h4>
+        <pre>
+# Глава
+## Подглава
+Текст описания...
+
+Примеры:
+- Пример поведения
+        </pre>
+        <p className="note">
+          ⚠️ После загрузки файла обязательно нажмите "Синхронизировать с Qdrant" для генерации embeddings!
+        </p>
+      </div>
+
       <DataTable
         columns={columns}
         data={documents}

@@ -4,12 +4,6 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 
 
-class BaseModelExtended(BaseModel):
-    """Extended BaseModel with optional extra fields."""
-
-    model_config = ConfigDict(extra="allow")
-
-
 # ===== UserProfile =====
 
 
@@ -167,3 +161,38 @@ class ModelComplexity:
     FAST = 1
     BALANCED = 2
     POWERFUL = 3
+
+
+# ===== Classification schemas =====
+
+class MessageCategory:
+    """Message category enum for classification."""
+
+    GREETING = "приветствие"
+    FAREWELL = "прощание"
+    CRITICISM = "критика"
+    FLATTERY = "ласть"
+    OFFTOPIC = "офтопик"
+    COMPLIMENT = "комплимент"
+    COMPLAINT = "жалоба"
+    REQUEST = "запрос"
+    INFORMATION = "информация"
+    EMOTION = "эмоция"
+    UNKNOWN = "неизвестно"
+
+
+class ClassificationResult(BaseModel):
+    """Result of message classification."""
+
+    category: str
+    category_code: str
+    confidence: float = 1.0
+    processed_at: int = 0
+
+
+class CultureSearchParams(BaseModel):
+    """Parameters for culture search with classification."""
+
+    query: str
+    limit: int = 3
+    category: Optional[str] = None

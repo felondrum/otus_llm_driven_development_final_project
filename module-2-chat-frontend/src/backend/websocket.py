@@ -422,13 +422,13 @@ async def handle_message(websocket: WebSocket, message: dict, connection: Connec
     logger.info(f"Message processed and sent from {connection.user_id} to {connection.selected_recipient}")
 
 
-# Styles list (loaded from Core Engine)
-STYLES = [
-    {"id": "chekhov", "name": "Антон Чехов", "description": "Ироничный, меланхоличный"},
-    {"id": "dovlatov", "name": "Сергей Довлатов", "description": "Самоирония, короткие фразы"},
-    {"id": "pelevin", "name": "Виктор Пелевин", "description": "Постмодерн, сатира"},
-    {"id": "ilfpetrov", "name": "Ильф и Петров", "description": "Юмор, сатира, остроумие"}
-]
+# Styles list (loaded from Module 3 PostgreSQL)
+# STYLES = [
+#     {"id": "chekhov", "name": "Антон Чехов", "description": "Ироничный, меланхоличный"},
+#     {"id": "dovlatov", "name": "Сергей Довлатов", "description": "Самоирония, короткие фразы"},
+#     {"id": "pelevin", "name": "Виктор Пелевин", "description": "Постмодерн, сатира"},
+#     {"id": "ilfpetrov", "name": "Ильф и Петров", "description": "Юмор, сатира, остроумие"}
+# ]
 
 
 async def get_users():
@@ -437,5 +437,17 @@ async def get_users():
 
 
 async def get_styles():
-    """Get list of available styles"""
-    return STYLES
+    """Get list of available styles from Module 3"""
+    from api import get_styles_from_module3
+    try:
+        styles = await get_styles_from_module3()
+        if styles:
+            return styles
+    except Exception as e:
+        logger.warning(f"Failed to load styles from Module 3: {e}")
+    
+    # Fallback to default styles if Module 3 is not available
+    return [
+        {"id": "chekov", "name": "чеховский"},
+        {"id": "dovlatov", "name": "довлатовский"}
+    ]

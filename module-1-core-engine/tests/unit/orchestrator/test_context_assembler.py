@@ -101,7 +101,8 @@ class TestContextAssembler:
         )
         
         assert 'Hello' in result
-        assert '## Примеры стиля:' in result
+        assert '## Примеры применения стиля:' in result
+        assert 'formal' in result.lower()
     
     def test_parse_llm_response_basic(self):
         """Парсинг ответа LLM."""
