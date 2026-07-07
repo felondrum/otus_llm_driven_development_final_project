@@ -448,6 +448,6 @@ async def get_styles():
     
     # Fallback to default styles if Module 3 is not available
     return [
-        {"id": "chekov", "name": "чеховский"},
+        {"id": "chekhov", "name": "чеховский"},
         {"id": "dovlatov", "name": "довлатовский"}
     ]

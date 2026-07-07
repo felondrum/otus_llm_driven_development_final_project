@@ -22,7 +22,7 @@ from common.metrics import (
     track_grpc_timeout,
     track_llm_model_call,
 )
-from common.validator import InputValidator
+from common.validator import InputValidator, normalize_style_name
 from common.langfuse_integration import (
     init_langfuse_from_config,
     log_generation,
@@ -238,6 +238,10 @@ async def health_check():
 async def process_message(request: ProcessMessageRequest):
     """Process incoming message and return adapted version."""
     message_id = request.message_id
+    
+    # Normalize style_name from Russian to English
+    normalized_style_name = normalize_style_name(request.style_name)
+    
     log_info("Processing message", message_id=message_id)
 
     # Validate input first
@@ -246,7 +250,7 @@ async def process_message(request: ProcessMessageRequest):
         "sender_id": request.sender_id,
         "recipient_id": request.recipient_id,
         "text": request.text,
-        "style_name": request.style_name,
+        "style_name": normalized_style_name,
     })
     if not is_valid:
         log_error("Invalid message input", error=error)
@@ -280,7 +284,7 @@ async def process_message(request: ProcessMessageRequest):
             "message_id": message_id,
             "sender_id": request.sender_id,
             "recipient_id": request.recipient_id,
-            "has_style": bool(request.style_name),
+            "has_style": bool(normalized_style_name),
         },
     ):
         # Check cache
@@ -370,12 +374,12 @@ async def process_message(request: ProcessMessageRequest):
 
         # Fetch style examples via HTTP
         styles = []
-        if request.style_name:
+        if normalized_style_name:
             try:
                 retriever_url = get_retriever_url()
                 http_client = get_http_client()
                 response = await http_client.get(
-                    f"{retriever_url}/api/v1/styles/examples?style_name={request.style_name}&sample_count=3",
+                    f"{retriever_url}/api/v1/styles/examples?style_name={normalized_style_name}&sample_count=3",
                     timeout=5.0,
                 )
                 if response.status_code == 200:
@@ -389,8 +393,8 @@ async def process_message(request: ProcessMessageRequest):
         try:
             # Формируем семантический запрос с учетом стиля и роли
             culture_query_parts = []
-            if request.style_name:
-                culture_query_parts.append(f"стиль {request.style_name}")
+            if normalized_style_name:
+                culture_query_parts.append(f"стиль {normalized_style_name}")
             if profile:
                 if profile.get('role'):
                     culture_query_parts.append(f"роль {profile.get('role')}")
@@ -422,7 +426,7 @@ async def process_message(request: ProcessMessageRequest):
             profile=profile,
             rules=rules,
             styles=styles,
-            style_name=request.style_name,
+            style_name=normalized_style_name,
             culture_chunks=culture_chunks,
             classification_result=classification_result,
         )
@@ -453,7 +457,7 @@ async def process_message(request: ProcessMessageRequest):
                         "config": {
                             "temperature": 0.7,
                             "max_tokens": 2048,
-                            "style": request.style_name,
+                            "style": normalized_style_name,
                         },
                     },
                     timeout=30.0,

@@ -3,6 +3,39 @@
 import uuid
 from typing import Dict, Any, Tuple, Optional
 
+# Russian to English style name mapping
+STYLE_NAME_MAPPING = {
+    "чеховский": "chekhov",
+    "чехов": "chekhov",
+    "довлатовский": "dovlatov",
+    "довлатов": "dovlatov",
+    "пелевинский": "pelevin",
+    "пелевин": "pelevin",
+    "илфпетровский": "ilfpetrov",
+    "илфпетров": "ilfpetrov",
+    "chekhov": "chekhov",
+    "dovlatov": "dovlatov",
+    "pelevin": "pelevin",
+    "ilfpetrov": "ilfpetrov",
+}
+
+
+def normalize_style_name(style_name: Optional[str]) -> Optional[str]:
+    """
+    Normalize style name from Russian to English.
+
+    Args:
+        style_name: Style name (can be Russian or English)
+
+    Returns:
+        English style name or None
+    """
+    if style_name is None or style_name == "":
+        return style_name
+    
+    style_lower = style_name.lower().strip()
+    return STYLE_NAME_MAPPING.get(style_lower, style_lower)
+
 
 def validate_uuid(value: str) -> bool:
     """
@@ -81,9 +114,10 @@ def validate_style_name(style_name: Optional[str]) -> bool:
         valid_styles = [0, 1, 2, 3]  # Enum values
         return style_name in valid_styles
 
-    # String validation
-    valid_styles = ["chekhov", "dovlatov", "pelevin", "ilfpetrov"]
-    return style_name.lower() in valid_styles
+    # String validation - support both English IDs and Russian names
+    style_lower = style_name.lower().strip()
+    
+    return style_lower in STYLE_NAME_MAPPING
 
 
 def validate_role(role: Optional[str]) -> bool:

@@ -94,7 +94,7 @@ ON CONFLICT (rule_id) DO NOTHING;
 
 -- Insert initial data from demo_data/styles.json
 INSERT INTO styles (style_id, name, description, category, tone, examples, is_active) VALUES
-('chekov', 'чеховский', 'Стиль Антона Чехова: меланхолия и ирония', 'literary', 'melancholy', '[{"input": "Нужно срочно решить проблему", "output": "Дорогой мой, всё это так грустно... Но, может быть, и добрая улыбка промелькнет на лице судьбы...", "note": "Добавить эмпатию и иронию"}]', true),
+('chekhov', 'чеховский', 'Стиль Антона Чехова: меланхолия и ирония', 'literary', 'melancholy', '[{"input": "Нужно срочно решить проблему", "output": "Дорогой мой, всё это так грустно... Но, может быть, и добрая улыбка промелькнет на лице судьбы...", "note": "Добавить эмпатию и иронию"}]', true),
 ('dovlatov', 'довлатовский', 'Стиль Сергея Довлатова: самоирония и советская эпоха', 'literary', 'self-irony', '[{"input": "Ситуация сложная", "output": "В жизни бывает по-разному. Бывает, что человек становится богатым, а бывает, что бедным.", "note": "Добавить самоиронию"}]', true)
 ON CONFLICT (style_id) DO NOTHING;
 
